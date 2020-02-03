@@ -38,10 +38,10 @@ def main(args, init_distributed=False):
         'Must specify batch size either with --max-tokens or --max-sentences'
 
     # Initialize CUDA and distributed training
-    if torch.cuda.is_available() and not args.cpu:
+    if torch.cuda.is_available() and not args.cpu and not getattr(args, 'tpu', False):
         torch.cuda.set_device(args.device_id)
     np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
+    utils.set_torch_seed(args.seed)
     if init_distributed:
         args.distributed_rank = distributed_utils.distributed_init(args)
 
@@ -70,8 +70,8 @@ def main(args, init_distributed=False):
 
     # Build trainer
     trainer = Trainer(args, task, model, criterion)
-    logger.info('training on {} GPUs'.format(args.distributed_world_size))
-    logger.info('max tokens per GPU = {} and max sentences per GPU = {}'.format(
+    logger.info('training on {} devices (GPUs/TPUs)'.format(args.distributed_world_size))
+    logger.info('max tokens per device = {} and max sentences per device = {}'.format(
         args.max_tokens,
         args.max_sentences,
     ))
@@ -142,6 +142,14 @@ def should_stop_early(args, valid_loss):
         return should_stop_early.num_runs > args.patience
 
 
+def tpu_data_loader(args, itr):
+    import torch_xla.distributed.parallel_loader as pl
+    device = utils.get_tpu_device(args)
+    itr_len = len(itr)
+    itr = pl.ParallelLoader(itr, [device]).per_device_loader(device)
+    return iterators.CountingIterator(itr, override_len=itr_len)
+
+
 @metrics.aggregate('train')
 def train(args, trainer, task, epoch_itr):
     """Train the model for one epoch."""
@@ -156,6 +164,8 @@ def train(args, trainer, task, epoch_itr):
         else args.update_freq[-1]
     )
     itr = iterators.GroupedIterator(itr, update_freq)
+    if getattr(args, 'tpu', False):
+        itr = tpu_data_loader(args, itr)
     progress = progress_bar.progress_bar(
         itr,
         log_format=args.log_format,
@@ -172,8 +182,21 @@ def train(args, trainer, task, epoch_itr):
 
     valid_subsets = args.valid_subset.split(',')
     max_update = args.max_update or math.inf
-    for samples in progress:
+    print("beginning warmup")
+    import time
+    for i, samples in enumerate(progress):
+        if i == 50:
+            print("end warmup, begin measurement")
+            start_time = time.time()
         log_output = trainer.train_step(samples)
+        if i == 100:
+            measured_time = time.time() - start_time
+            print(
+                "end measurement, time for rank {}: {}"
+                .format(args.distributed_rank, measured_time)
+            )
+            time.sleep(5)
+            sys.exit()
         num_updates = trainer.get_num_updates()
         if log_output is None:
             continue
@@ -203,8 +226,6 @@ def train(args, trainer, task, epoch_itr):
 
 
 def get_training_stats(stats):
-    if 'nll_loss' in stats and 'ppl' not in stats:
-        stats['ppl'] = utils.get_perplexity(stats['nll_loss'])
     stats['wall'] = round(metrics.get_meter('default', 'wall').elapsed_time, 0)
     return stats
 
@@ -234,6 +255,8 @@ def validate(args, trainer, task, epoch_itr, subsets):
             shard_id=args.distributed_rank,
             num_workers=args.num_workers,
         ).next_epoch_itr(shuffle=False)
+        if getattr(args, 'tpu', False):
+            itr = tpu_data_loader(args, itr)
         progress = progress_bar.progress_bar(
             itr,
             log_format=args.log_format,
@@ -261,8 +284,6 @@ def validate(args, trainer, task, epoch_itr, subsets):
 
 
 def get_valid_stats(args, trainer, stats):
-    if 'nll_loss' in stats and 'ppl' not in stats:
-        stats['ppl'] = utils.get_perplexity(stats['nll_loss'])
     stats['num_updates'] = trainer.get_num_updates()
     if hasattr(checkpoint_utils.save_checkpoint, 'best'):
         key = 'best_{0}'.format(args.best_checkpoint_metric)
@@ -301,18 +322,26 @@ def cli_main(modify_parser=None):
         else:
             distributed_main(args.device_id, args)
     elif args.distributed_world_size > 1:
-        # fallback for single node with multiple GPUs
-        assert args.distributed_world_size <= torch.cuda.device_count()
-        port = random.randint(10000, 20000)
-        args.distributed_init_method = 'tcp://localhost:{port}'.format(port=port)
-        args.distributed_rank = None  # set based on device id
-        if max(args.update_freq) > 1 and args.ddp_backend != 'no_c10d':
-            logger.info('NOTE: you may get faster training with: --ddp-backend=no_c10d')
-        torch.multiprocessing.spawn(
-            fn=distributed_main,
-            args=(args, ),
-            nprocs=args.distributed_world_size,
-        )
+        if not getattr(args, 'tpu', False):
+            # fallback for single node with multiple GPUs
+            assert args.distributed_world_size <= torch.cuda.device_count()
+            port = random.randint(10000, 20000)
+            args.distributed_init_method = 'tcp://localhost:{port}'.format(port=port)
+            args.distributed_rank = None  # set based on device id
+            if max(args.update_freq) > 1 and args.ddp_backend != 'no_c10d':
+                logger.info('NOTE: you may get faster training with: --ddp-backend=no_c10d')
+            torch.multiprocessing.spawn(
+                fn=distributed_main,
+                args=(args, ),
+                nprocs=args.distributed_world_size,
+            )
+        else:
+            import torch_xla.distributed.xla_multiprocessing as xmp
+            xmp.spawn(
+                fn=distributed_main,
+                args=(args, ),
+                nprocs=8,  # use all 8 TPU cores
+            )
     else:
         # single GPU training
         main(args)

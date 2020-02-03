@@ -192,7 +192,10 @@ class FairseqTask(object):
             a :class:`~fairseq.models.BaseFairseqModel` instance
         """
         from fairseq import models
-        return models.build_model(args, self)
+        model = models.build_model(args, self)
+        if getattr(args, 'tpu', False):
+            model.prepare_for_tpu_()
+        return model
 
     def build_criterion(self, args):
         """
@@ -358,7 +361,7 @@ class FairseqTask(object):
         else:
             ntokens = utils.item(sum(log.get('ntokens', 0) for log in logging_outputs))
             metrics.log_scalar('wpb', ntokens, priority=180, round=1)
-            metrics.log_speed('wps', ntokens, ignore_first=10, priority=90, round=1)
+            metrics.log_speed('wps', ntokens, ignore_first=4, priority=90, round=1)
 
         if not any('nsentences' in log for log in logging_outputs):
             warnings.warn('nsentences not found in Criterion logging outputs, cannot log bsz')

@@ -40,6 +40,8 @@ class MultiheadAttention(nn.Module):
         self.vdim = vdim if vdim is not None else embed_dim
         self.qkv_same_dim = self.kdim == embed_dim and self.vdim == embed_dim
 
+        self.enable_torch_version = torch.cuda.is_available()
+
         self.num_heads = num_heads
         self.dropout = dropout
         self.head_dim = embed_dim // num_heads
@@ -55,9 +57,13 @@ class MultiheadAttention(nn.Module):
             "Self-attention requires query, key and " "value to be of the same size"
         )
 
-        self.k_proj = nn.Linear(self.kdim, embed_dim, bias=bias)
-        self.v_proj = nn.Linear(self.vdim, embed_dim, bias=bias)
-        self.q_proj = nn.Linear(embed_dim, embed_dim, bias=bias)
+        if self.qkv_same_dim and not self.enable_torch_version:
+            self.in_proj_weight = Parameter(torch.zeros(3 * embed_dim, embed_dim))
+            self.in_proj_bias = Parameter(torch.zeros(3 * embed_dim))
+        else:
+            self.k_proj = nn.Linear(self.kdim, embed_dim, bias=bias)
+            self.v_proj = nn.Linear(self.vdim, embed_dim, bias=bias)
+            self.q_proj = nn.Linear(embed_dim, embed_dim, bias=bias)
 
         self.out_proj = nn.Linear(embed_dim, embed_dim, bias=bias)
 
@@ -73,12 +79,6 @@ class MultiheadAttention(nn.Module):
 
         self.onnx_trace = False
 
-        self.enable_torch_version = False
-        if hasattr(F, "multi_head_attention_forward"):
-            self.enable_torch_version = True
-        else:
-            self.enable_torch_version = False
-
     def prepare_for_onnx_export_(self):
         self.onnx_trace = True
 
@@ -86,9 +86,14 @@ class MultiheadAttention(nn.Module):
         if self.qkv_same_dim:
             # Empirically observed the convergence to be much better with
             # the scaled initialization
-            nn.init.xavier_uniform_(self.k_proj.weight, gain=1 / math.sqrt(2))
-            nn.init.xavier_uniform_(self.v_proj.weight, gain=1 / math.sqrt(2))
-            nn.init.xavier_uniform_(self.q_proj.weight, gain=1 / math.sqrt(2))
+            if not self.enable_torch_version:
+                nn.init.xavier_uniform_(self.in_proj_weight)
+                if self.in_proj_bias is not None:
+                    nn.init.constant_(self.in_proj_bias, 0.)
+            else:
+                nn.init.xavier_uniform_(self.k_proj.weight, gain=1 / math.sqrt(2))
+                nn.init.xavier_uniform_(self.v_proj.weight, gain=1 / math.sqrt(2))
+                nn.init.xavier_uniform_(self.q_proj.weight, gain=1 / math.sqrt(2))
         else:
             nn.init.xavier_uniform_(self.k_proj.weight)
             nn.init.xavier_uniform_(self.v_proj.weight)
@@ -182,24 +187,23 @@ class MultiheadAttention(nn.Module):
             saved_state = None
 
         if self.self_attention:
-            q = self.q_proj(query)
-            k = self.k_proj(query)
-            v = self.v_proj(query)
+            q, k, v = self.in_proj_qkv(query)
         elif self.encoder_decoder_attention:
+            raise Exception
             # encoder-decoder attention
-            q = self.q_proj(query)
+            q = self.in_proj_q(query)
             if key is None:
                 assert value is None
                 k = v = None
             else:
-                k = self.k_proj(key)
-                v = self.v_proj(key)
-
+                k = self.in_proj_k(key)
+                v = self.in_proj_v(key)
         else:
+            raise Exception
             assert key is not None and value is not None
-            q = self.q_proj(query)
-            k = self.k_proj(key)
-            v = self.v_proj(value)
+            q = self.in_proj_q(query)
+            k = self.in_proj_k(key)
+            v = self.in_proj_v(value)
         q *= self.scaling
 
         if self.bias_k is not None:
@@ -459,3 +463,49 @@ class MultiheadAttention(nn.Module):
 
         for key, value in items_to_add.items():
             state_dict[key] = value
+
+    def in_proj_qkv(self, query):
+        #return self._in_proj(query).chunk(3, dim=-1)
+        x = self._in_proj(query)
+        sz = self.embed_dim
+        return x[:, :, :sz], x[:, :, sz:2*sz], x[:, :, -sz:]
+
+    def in_proj_q(self, query):
+        raise Exception
+        if self.qkv_same_dim:
+            return self._in_proj(query, end=self.embed_dim)
+        else:
+            bias = self.in_proj_bias
+            if bias is not None:
+                bias = bias[:self.embed_dim]
+            return F.linear(query, self.q_proj_weight, bias)
+
+    def in_proj_k(self, key):
+        raise Exception
+        if self.qkv_same_dim:
+            return self._in_proj(key, start=self.embed_dim, end=2 * self.embed_dim)
+        else:
+            weight = self.k_proj_weight
+            bias = self.in_proj_bias
+            if bias is not None:
+                bias = bias[self.embed_dim:2 * self.embed_dim]
+            return F.linear(key, weight, bias)
+
+    def in_proj_v(self, value):
+        raise Exception
+        if self.qkv_same_dim:
+            return self._in_proj(value, start=2 * self.embed_dim)
+        else:
+            weight = self.v_proj_weight
+            bias = self.in_proj_bias
+            if bias is not None:
+                bias = bias[2 * self.embed_dim:]
+            return F.linear(value, weight, bias)
+
+    def _in_proj(self, input, start=0, end=None):
+        weight = self.in_proj_weight
+        bias = self.in_proj_bias
+        #weight = weight[start:end, :]
+        #if bias is not None:
+        #    bias = bias[start:end]
+        return F.linear(input, weight, bias)

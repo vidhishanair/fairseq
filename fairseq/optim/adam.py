@@ -34,7 +34,12 @@ class FairseqAdam(FairseqOptimizer):
             and fused_adam_cls is not None
             and torch.cuda.is_available()
         )
-        if use_fused_adam:
+        if getattr(args, 'tpu', False):
+            # on TPUs we use PyTorch's AdamW instead of the one defined
+            # here, since the one here casts gradients to FP32, whereas
+            # on TPU we want to keep them in bfloat16
+            self._optimizer = torch.optim.AdamW(params, **self.optimizer_config)
+        elif use_fused_adam:
             logger.info('using FusedAdam')
             self._optimizer = fused_adam_cls(params, **self.optimizer_config)
         else:

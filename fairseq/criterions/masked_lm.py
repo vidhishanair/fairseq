@@ -28,17 +28,23 @@ class MaskedLmLoss(FairseqCriterion):
         """
         # compute MLM loss
         masked_tokens = sample['target'].ne(self.padding_idx)
-        sample_size = masked_tokens.int().sum().item()
+        sample_size = masked_tokens.int().sum()
 
-        # (Rare case) When all tokens are masked, the model results in empty
-        # tensor and gives CUDA error.
-        if sample_size == 0:
-            masked_tokens = None
+        if not getattr(self.args, 'tpu', False):
+            # (rare) when all tokens are masked, we project all tokens
+            # to |vocab| to avoid CUDA errors
+            only_project_masked = masked_tokens.any()
+        else:
+            # TPUs are slower with dynamic shapes
+            only_project_masked = False
 
-        logits = model(**sample['net_input'], masked_tokens=masked_tokens)[0]
+        logits = model(
+            **sample['net_input'],
+            masked_tokens=masked_tokens if only_project_masked else None,
+        )[0]
         targets = model.get_targets(sample, [logits])
 
-        if sample_size != 0:
+        if only_project_masked:
             targets = targets[masked_tokens]
 
         loss = F.nll_loss(

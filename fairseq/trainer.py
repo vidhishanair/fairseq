@@ -8,11 +8,11 @@ Train a network across multiple GPUs.
 """
 
 import contextlib
-from itertools import chain
 import logging
 import math
 import os
 import sys
+from itertools import chain
 from typing import Any, Dict, List
 
 import torch
@@ -40,9 +40,12 @@ class Trainer(object):
         self.args = args
         self.task = task
 
-        self.cuda = torch.cuda.is_available() and not args.cpu
+        self.tpu = getattr(args, 'tpu', False)
+        self.cuda = torch.cuda.is_available() and not args.cpu and not self.tpu
         if self.cuda:
             self.device = torch.device('cuda')
+        elif self.tpu:
+            self.device = utils.get_tpu_device(args)
         else:
             self.device = torch.device('cpu')
 
@@ -52,6 +55,9 @@ class Trainer(object):
         if args.fp16:
             self._criterion = self._criterion.half()
             self._model = self._model.half()
+        elif args.bf16:
+            self._criterion = self._criterion.to(dtype=torch.bfloat16)
+            self._model = self._model.to(dtype=torch.bfloat16)
         self._criterion = self._criterion.to(device=self.device)
         self._model = self._model.to(device=self.device)
 
@@ -64,6 +70,7 @@ class Trainer(object):
         self._wrapped_criterion = None
         self._wrapped_model = None
 
+        # TODO(myleott): support tpu
         if self.cuda and args.distributed_world_size > 1:
             self._grad_norm_buf = torch.cuda.DoubleTensor(args.distributed_world_size)
         else:
@@ -79,6 +86,8 @@ class Trainer(object):
                 and self.args.distributed_world_size > 1
                 and not self.args.use_bmuf
             ):
+                if self.tpu:
+                    raise NotImplementedError
                 self._wrapped_criterion = models.DistributedFairseqModel(
                     self.args, self._criterion
                 )
@@ -89,7 +98,11 @@ class Trainer(object):
     @property
     def model(self):
         if self._wrapped_model is None:
-            if self.args.distributed_world_size > 1 and not self.args.use_bmuf:
+            if (
+                self.args.distributed_world_size > 1
+                and not self.args.use_bmuf
+                and not self.tpu
+            ):
                 self._wrapped_model = models.DistributedFairseqModel(
                     self.args, self._model
                 )
@@ -205,6 +218,8 @@ class Trainer(object):
                 last_optim["optimizer_name"] == self.optimizer.__class__.__name__
             ), "Optimizer does not match; please reset the optimizer (--reset-optimizer)."
 
+            if self.tpu:
+                raise NotImplementedError  # need to call xm.send_cpu_data_to_device?
             if not reset_lr_scheduler:
                 self.lr_scheduler.load_state_dict(last_optim["lr_scheduler_state"])
             self.optimizer.load_state_dict(last_optim_state, optimizer_overrides)
@@ -341,28 +356,39 @@ class Trainer(object):
                 else:
                     raise e
 
+            if self.tpu and i < len(samples) - 1:
+                # tpu-comment: every XLA operation before marking step is
+                # appended to the IR graph, and processing too many batches
+                # before marking step can lead to OOM errors.
+                # To handle gradient accumulation use case, we explicitly
+                # mark step here for every forward pass without a backward pass
+                import torch_xla.core.xla_model as xm
+                xm.mark_step()
+
         # gather logging outputs from all replicas
         if self._sync_stats():
             logging_outputs, (sample_size, ooms) = self._aggregate_logging_outputs(
                 logging_outputs, sample_size, ooms, ignore=is_dummy_batch,
             )
 
-        metrics.log_scalar("oom", ooms, len(samples), priority=600, round=3)
+        if not self.tpu:
+            metrics.log_scalar("oom", ooms, len(samples), priority=600, round=3)
         if ooms == self.args.distributed_world_size * len(samples):
             logger.warning("OOM in all workers, skipping update")
             self.zero_grad()
             return None
 
         try:
-            # normalize grads by sample size
-            if sample_size > 0:
-                if self._sync_stats():
-                    # multiply gradients by (# GPUs / sample_size) since DDP
-                    # already normalizes by the number of GPUs. Thus we get
-                    # (sum_of_gradients / sample_size).
-                    self.optimizer.multiply_grads(self.args.distributed_world_size / sample_size)
-                else:
-                    self.optimizer.multiply_grads(1 / sample_size)
+            # multiply gradients by (# GPUs / sample_size) since DDP
+            # already normalizes by the number of GPUs. Thus we get
+            # (sum_of_gradients / sample_size).
+            if not self.args.use_bmuf:
+                self.optimizer.multiply_grads(
+                    self.args.distributed_world_size / sample_size
+                )
+            elif sample_size > 0:  # BMUF needs to check sample size
+                num = self.args.distributed_world_size if self._sync_stats() else 1
+                self.optimizer.multiply_grads(num / sample_size)
 
             # clip grads
             grad_norm = self.optimizer.clip_grad_norm(self.args.clip_norm)
@@ -371,35 +397,47 @@ class Trainer(object):
             if not self.args.use_bmuf:
                 self._check_grad_norms(grad_norm)
 
-            # take an optimization step
-            self.optimizer.step()
-            self.set_num_updates(self.get_num_updates() + 1)
+            if self.tpu:
+                import torch_xla.core.xla_model as xm
 
-            # task specific update per step
-            self.task.update_step(self.get_num_updates())
+                # task specific update per step
+                self.set_num_updates(self.get_num_updates() + 1)
+                self.task.update_step(self.get_num_updates())
 
-            # log stats
-            logging_output = self._reduce_and_log_stats(logging_outputs, sample_size)
-            metrics.log_speed("ups", 1., ignore_first=10, priority=100, round=2)
-            metrics.log_scalar("gnorm", utils.item(grad_norm), priority=400, round=3)
-            metrics.log_scalar(
-                "clip",
-                100 if grad_norm > self.args.clip_norm > 0 else 0,
-                priority=500,
-                round=1,
-            )
+                # queue reduction and logging of stats
+                # this causes wps to be misreported when log_interval > 1
+                logging_output = {}
+                if self.get_num_updates() % self.args.log_interval == 0:
+                    xm.add_step_closure(
+                        self._reduce_and_log_stats,
+                        args=(logging_outputs, sample_size, grad_norm, self.args.log_interval),
+                    )
 
-            # clear CUDA cache to reduce memory fragmentation
-            if (
-                self.args.empty_cache_freq > 0
-                and (
-                    (self.get_num_updates() + self.args.empty_cache_freq - 1)
-                    % self.args.empty_cache_freq
-                ) == 0
-                and torch.cuda.is_available()
-                and not self.args.cpu
-            ):
-                torch.cuda.empty_cache()
+                # take an optimization step and run the queued closures
+                xm.optimizer_step(self.optimizer.optimizer)
+            else:
+                # take an optimization step
+                self.optimizer.step()
+
+                # task specific update per step
+                self.set_num_updates(self.get_num_updates() + 1)
+                self.task.update_step(self.get_num_updates())
+
+                # log stats
+                logging_output = self._reduce_and_log_stats(
+                    logging_outputs, sample_size, grad_norm,
+                )
+
+                # clear CUDA cache to reduce memory fragmentation
+                if (
+                    self.cuda
+                    and self.args.empty_cache_freq > 0
+                    and (
+                        (self.get_num_updates() + self.args.empty_cache_freq - 1)
+                        % self.args.empty_cache_freq
+                    ) == 0
+                ):
+                    torch.cuda.empty_cache()
         except OverflowError as e:
             logger.info("NOTE: overflow detected, " + str(e))
             self.zero_grad()
@@ -563,8 +601,16 @@ class Trainer(object):
                 return t.half()
             return t
 
+        def apply_bfloat16(t):
+            if t.dtype is torch.float32:
+                return t.to(dtype=torch.bfloat16)
+            return t
+
         if self.args.fp16:
             sample = utils.apply_to_sample(apply_half, sample)
+
+        if self.args.bf16:
+            sample = utils.apply_to_sample(apply_bfloat16, sample)
 
         return sample
 
@@ -572,21 +618,20 @@ class Trainer(object):
         # Set seed based on args.seed and the update number so that we get
         # reproducible results when resuming from checkpoints
         seed = self.args.seed + self.get_num_updates()
-        torch.manual_seed(seed)
-        if self.cuda:
-            torch.cuda.manual_seed(seed)
+        utils.set_torch_seed(seed)
 
     def _sync_stats(self):
         # Return True if it's using multiple GPUs and DDP or multiple GPUs with
         # BMUF and it's a bmuf sync with warmup iterations completed before.
-        return self.args.distributed_world_size > 1 and (
-            (not self.args.use_bmuf)
-            or (
-                self.args.use_bmuf
-                and (self.get_num_updates() + 1) % self.args.global_sync_iter == 0
+        if self.args.distributed_world_size == 1:
+            return False
+        elif self.args.use_bmuf:
+            return (
+                (self.get_num_updates() + 1) % self.args.global_sync_iter == 0
                 and (self.get_num_updates() + 1) > self.args.warmup_iterations
             )
-        )
+        else:
+            return True
 
     def _log_oom(self, exc):
         msg = "OOM: Ran out of memory with exception: {}".format(exc)
@@ -621,6 +666,8 @@ class Trainer(object):
         Sync logging outputs across workers. all_gather_list_sync is
         suitable when logging outputs are complex types.
         """
+        if self.tpu:
+            raise NotImplementedError
         if ignore:
             logging_outputs = []
         results = list(zip(
@@ -664,6 +711,7 @@ class Trainer(object):
         data = distributed_utils.all_reduce_dict(
             data,
             device=self.device,
+            group='tpu' if self.tpu else None,
         )
 
         extra_stats_to_sum = [
@@ -687,18 +735,39 @@ class Trainer(object):
                     "Try --ddp-backend=no_c10d."
                 )
 
-    def _reduce_and_log_stats(self, logging_outputs, sample_size):
-        if logging_outputs is None or len(logging_outputs) == 0:
-            return {"sample_size": sample_size}
-        with metrics.aggregate() as agg:
-            # convert logging_outputs to CPU to avoid unnecessary
-            # device-to-host transfers in reduce_metrics
-            logging_outputs = utils.apply_to_sample(
-                lambda t: t.to(device='cpu', non_blocking=True, dtype=torch.double),
-                logging_outputs
+    def _reduce_and_log_stats(
+        self,
+        logging_outputs,
+        sample_size,
+        grad_norm=None,
+        updates_since_last_log=1,
+    ):
+        if grad_norm is not None:
+            grad_norm = utils.item(grad_norm)
+            metrics.log_speed("ups", updates_since_last_log, ignore_first=4, priority=100, round=2)
+            metrics.log_scalar("gnorm", grad_norm, priority=400, round=3)
+            metrics.log_scalar(
+                "clip",
+                100 if grad_norm > self.args.clip_norm > 0 else 0,
+                priority=500,
+                round=1,
             )
 
-            self.task.reduce_metrics(logging_outputs, self.get_criterion())
+        if logging_outputs is None or len(logging_outputs) == 0:
+            return {"sample_size": sample_size}
+
+        with metrics.aggregate() as agg:
+            if logging_outputs is not None:
+                # convert logging_outputs to CPU to avoid unnecessary
+                # device-to-host transfers in reduce_metrics
+                logging_outputs = utils.apply_to_sample(
+                    lambda t: t.to(device='cpu', non_blocking=True, dtype=torch.double),
+                    logging_outputs
+                )
+
+                self.task.reduce_metrics(logging_outputs, self.get_criterion())
+            else:
+                logger.warning('no metrics to reduce on rank {}'.format(self.args.distributed_rank))
 
             # support legacy interface
             logging_output = agg.get_smoothed_values()

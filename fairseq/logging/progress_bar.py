@@ -170,12 +170,11 @@ class JsonProgressBar(BaseProgressBar):
     def __iter__(self):
         size = float(len(self.iterable))
         for i, obj in enumerate(self.iterable, start=self.offset):
-            yield obj
             if (
                 self.stats is not None
                 and i > 0
                 and self.log_interval is not None
-                and (i + 1) % self.log_interval == 0
+                and i % self.log_interval == 0
             ):
                 update = (
                     self.epoch - 1 + float(i / size)
@@ -185,6 +184,8 @@ class JsonProgressBar(BaseProgressBar):
                 stats = self._format_stats(self.stats, epoch=self.epoch, update=update)
                 with rename_logger(logger, self.tag):
                     logger.info(json.dumps(stats))
+
+            yield obj
 
     def log(self, stats, tag=None, step=None):
         """Log intermediate stats according to log_interval."""
@@ -243,16 +244,17 @@ class SimpleProgressBar(BaseProgressBar):
     def __iter__(self):
         size = len(self.iterable)
         for i, obj in enumerate(self.iterable, start=self.offset):
-            yield obj
             if (
                 self.stats is not None
                 and i > 0
                 and self.log_interval is not None
-                and (i + 1) % self.log_interval == 0
+                and i % self.log_interval == 0
             ):
                 postfix = self._str_commas(self.stats)
                 with rename_logger(logger, self.tag):
                     logger.info('{}:  {:5d} / {:d} {}'.format(self.prefix, i, size, postfix))
+
+            yield obj
 
     def log(self, stats, tag=None, step=None):
         """Log intermediate stats according to log_interval."""

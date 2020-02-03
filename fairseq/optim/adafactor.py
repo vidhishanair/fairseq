@@ -124,10 +124,12 @@ class Adafactor(torch.optim.Optimizer):
     def _rms(self, tensor):
         return tensor.norm(2) / (tensor.numel() ** 0.5)
 
-    def _approx_sq_grad(self, exp_avg_sq_row, exp_avg_sq_col, output):
-        r_factor = (exp_avg_sq_row / exp_avg_sq_row.mean(dim=-1).unsqueeze(-1)).rsqrt_().unsqueeze(-1)
-        c_factor = exp_avg_sq_col.unsqueeze(-2).rsqrt()
-        torch.mul(r_factor, c_factor, out=output)
+    def _approx_sq_grad(self, exp_avg_sq_row, exp_avg_sq_col):
+        r_factor = (
+            exp_avg_sq_row / exp_avg_sq_row.mean(dim=-1, keepdim=True)
+        ).rsqrt_()
+        c_factor = exp_avg_sq_col.rsqrt()
+        return torch.mm(r_factor.unsqueeze(-1), c_factor.unsqueeze(0))
 
     def step(self, closure=None):
         """Performs a single optimization step.
@@ -191,15 +193,17 @@ class Adafactor(torch.optim.Optimizer):
                     exp_avg_sq_col.mul_(beta2t).add_(1.0 - beta2t, update.mean(dim=-2))
 
                     # Approximation of exponential moving average of square of gradient
-                    self._approx_sq_grad(exp_avg_sq_row, exp_avg_sq_col, update)
+                    update = self._approx_sq_grad(exp_avg_sq_row, exp_avg_sq_col)
                     update.mul_(grad)
                 else:
                     exp_avg_sq = state['exp_avg_sq']
 
                     exp_avg_sq.mul_(beta2t).add_(1.0 - beta2t, update)
-                    torch.rsqrt(exp_avg_sq, out=update).mul_(grad)
+                    update = exp_avg_sq.rsqrt().mul_(grad)
 
-                update.div_(max(1.0, self._rms(update) / group['clip_threshold']))
+                update.div_(
+                    (self._rms(update) / group['clip_threshold']).clamp_(min=1.0)
+                )
                 update.mul_(group['lr'])
 
                 if use_first_moment:
