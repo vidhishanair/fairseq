@@ -182,21 +182,21 @@ def train(args, trainer, task, epoch_itr):
 
     valid_subsets = args.valid_subset.split(',')
     max_update = args.max_update or math.inf
-    print("beginning warmup")
-    import time
+    #print("beginning warmup")
+    #import time
     for i, samples in enumerate(progress):
-        if i == 50:
-            print("end warmup, begin measurement")
-            start_time = time.time()
+        #if i == 50:
+        #    print("end warmup, begin measurement")
+        #    start_time = time.time()
         log_output = trainer.train_step(samples)
-        if i == 100:
-            measured_time = time.time() - start_time
-            print(
-                "end measurement, time for rank {}: {}"
-                .format(args.distributed_rank, measured_time)
-            )
-            time.sleep(5)
-            sys.exit()
+        #if i == 100:
+        #    measured_time = time.time() - start_time
+        #    print(
+        #        "end measurement, time for rank {}: {}"
+        #        .format(args.distributed_rank, measured_time)
+        #    )
+        #    time.sleep(5)
+        #    sys.exit()
         num_updates = trainer.get_num_updates()
         if log_output is None:
             continue
@@ -337,6 +337,8 @@ def cli_main(modify_parser=None):
             )
         else:
             import torch_xla.distributed.xla_multiprocessing as xmp
+            import torch.multiprocessing
+            torch.multiprocessing.set_sharing_strategy('file_system')
             xmp.spawn(
                 fn=distributed_main,
                 args=(args, ),
