@@ -286,6 +286,10 @@ class Trainer(object):
         """Do forward, backward and parameter update."""
         if self._dummy_batch == "DUMMY":
             self._dummy_batch = samples[0]
+        if self.tpu:
+            import torch_xla.core.xla_model as xm
+            xm.rendezvous('train_step')  # wait for all workers
+            xm.mark_step()
 
         self._set_seed()
         self.model.train()
@@ -458,6 +462,10 @@ class Trainer(object):
         """Do forward pass in evaluation mode."""
         if self._dummy_batch == "DUMMY":
             self._dummy_batch = sample
+        if self.tpu:
+            import torch_xla.core.xla_model as xm
+            xm.rendezvous('valid_step')  # wait for all workers
+            xm.mark_step()
 
         with torch.no_grad():
             self.model.eval()

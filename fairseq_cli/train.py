@@ -79,6 +79,10 @@ def main(args, init_distributed=False):
     # Load the latest checkpoint if one is available and restore the
     # corresponding train iterator
     extra_state, epoch_itr = checkpoint_utils.load_checkpoint(args, trainer)
+    if args.tpu:
+        import torch_xla.core.xla_model as xm
+        xm.rendezvous('done loading checkpoint')  # wait for all workers
+        xm.mark_step()
 
     # Train until the learning rate gets too small
     max_epoch = args.max_epoch or math.inf
@@ -143,7 +147,10 @@ def should_stop_early(args, valid_loss):
 
 
 def tpu_data_loader(args, itr):
+    import torch_xla.core.xla_model as xm
     import torch_xla.distributed.parallel_loader as pl
+    xm.rendezvous('tpu_data_loader')  # wait for all workers
+    xm.mark_step()
     device = utils.get_tpu_device(args)
     itr_len = len(itr)
     itr = pl.ParallelLoader(itr, [device]).per_device_loader(device)

@@ -106,6 +106,8 @@ def distributed_init(args):
         assert xm.xrt_world_size() == args.distributed_world_size
         args.device_id = xm.get_local_ordinal()
         args.distributed_rank = xm.get_ordinal()
+        xm.rendezvous('distributed_init')  # wait for all workers
+        xm.mark_step()
 
     if is_master(args):
         logging.getLogger().setLevel(logging.INFO)
