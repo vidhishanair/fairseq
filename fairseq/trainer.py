@@ -218,8 +218,6 @@ class Trainer(object):
                 last_optim["optimizer_name"] == self.optimizer.__class__.__name__
             ), "Optimizer does not match; please reset the optimizer (--reset-optimizer)."
 
-            if self.tpu:
-                raise NotImplementedError  # need to call xm.send_cpu_data_to_device?
             if not reset_lr_scheduler:
                 self.lr_scheduler.load_state_dict(last_optim["lr_scheduler_state"])
             self.optimizer.load_state_dict(last_optim_state, optimizer_overrides)
