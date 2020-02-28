@@ -140,6 +140,14 @@ def all_reduce(tensor, group=None):
         )
 
 
+def barrier(group=None):
+    if group == 'tpu':
+        import torch_xla.core.xla_model as xm
+        xm.rendezvous('distributed_utils.barrier')
+    else:
+        dist.barrier(group=(group if group is not None else get_default_group()))
+
+
 def all_gather_list(data, group=None, max_size=16384):
     """Gathers arbitrary data from all nodes into a list.
 
@@ -248,3 +256,21 @@ def all_reduce_dict(
         raise KeyError
 
     return OrderedDict([(key, get_from_stack(key)) for key in data_keys])
+
+
+def pdb(group=None):
+    """Set a break point in each worker, one by one.
+
+    Note that it's not possible to step through instructions in this
+    mode, but you can inspect state on each worker.
+    """
+    world_size = get_world_size()
+    rank = get_rank()
+    for i in range(world_size):
+        if i == rank:
+            from fairseq import pdb
+            print("Hello from rank {}".format(rank))
+            pdb.set_trace()
+            barrier(group=group)  # enter 'c' to continue to the next rank
+        else:
+            barrier(group=group)
