@@ -85,9 +85,8 @@ class Trainer(object):
                 utils.has_parameters(self._criterion)
                 and self.args.distributed_world_size > 1
                 and not self.args.use_bmuf
+                and not self.tpu
             ):
-                if self.tpu:
-                    raise NotImplementedError
                 self._wrapped_criterion = models.DistributedFairseqModel(
                     self.args, self._criterion
                 )
@@ -367,7 +366,11 @@ class Trainer(object):
                 xm.mark_step()
 
         if is_dummy_batch:
-            sample_size *= 0  # multiply by 0 to preserve device
+            sample_size *= 0.  # multiply by 0 to preserve device
+        if torch.is_tensor(sample_size):
+            sample_size = sample_size.float()
+        else:
+            sample_size = float(sample_size)
 
         # gather logging outputs from all replicas
         if self._sync_stats():
@@ -383,6 +386,11 @@ class Trainer(object):
             return None
 
         try:
+            if self.tpu and self.args.distributed_world_size > 1:
+                import torch_xla.core.xla_model as xm
+                gradients = xm._fetch_gradients(self.optimizer.optimizer)
+                xm.all_reduce('sum', gradients, scale=1.0 / self.args.distributed_world_size)
+
             # multiply gradients by (# GPUs / sample_size) since DDP
             # already normalizes by the number of GPUs. Thus we get
             # (sum_of_gradients / sample_size).
@@ -401,32 +409,22 @@ class Trainer(object):
             if not self.args.use_bmuf:
                 self._check_grad_norms(grad_norm)
 
+            # take an optimization step
+            self.optimizer.step()
+
+            # task specific update per step
+            self.set_num_updates(self.get_num_updates() + 1)
+            self.task.update_step(self.get_num_updates())
+
             if self.tpu:
-                import torch_xla.core.xla_model as xm
-
-                # task specific update per step
-                self.set_num_updates(self.get_num_updates() + 1)
-                self.task.update_step(self.get_num_updates())
-
-                # queue reduction and logging of stats
+                # only log stats every log_interval steps
                 # this causes wps to be misreported when log_interval > 1
                 logging_output = {}
                 if self.get_num_updates() % self.args.log_interval == 0:
-                    xm.add_step_closure(
-                        self._reduce_and_log_stats,
-                        args=(logging_outputs, sample_size, grad_norm, self.args.log_interval),
+                    logging_output = self._reduce_and_log_stats(
+                        logging_outputs, sample_size, grad_norm, self.args.log_interval,
                     )
-
-                # take an optimization step and run the queued closures
-                xm.optimizer_step(self.optimizer.optimizer)
             else:
-                # take an optimization step
-                self.optimizer.step()
-
-                # task specific update per step
-                self.set_num_updates(self.get_num_updates() + 1)
-                self.task.update_step(self.get_num_updates())
-
                 # log stats
                 logging_output = self._reduce_and_log_stats(
                     logging_outputs, sample_size, grad_norm,
