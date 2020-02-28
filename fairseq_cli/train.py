@@ -344,7 +344,6 @@ def cli_main(modify_parser=None):
             )
         else:
             import torch_xla.distributed.xla_multiprocessing as xmp
-            import torch.multiprocessing
             torch.multiprocessing.set_sharing_strategy('file_system')
             xmp.spawn(
                 fn=distributed_main,

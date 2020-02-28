@@ -338,8 +338,7 @@ class Trainer(object):
                     del loss
 
                 logging_outputs.append(logging_output)
-                if not is_dummy_batch:
-                    sample_size += sample_size_i
+                sample_size += sample_size_i
 
                 # emptying the CUDA cache after the first step can
                 # reduce the chance of OOM
@@ -366,6 +365,9 @@ class Trainer(object):
                 # mark step here for every forward pass without a backward pass
                 import torch_xla.core.xla_model as xm
                 xm.mark_step()
+
+        if is_dummy_batch:
+            sample_size *= 0  # multiply by 0 to preserve device
 
         # gather logging outputs from all replicas
         if self._sync_stats():
@@ -499,7 +501,7 @@ class Trainer(object):
 
             logging_outputs = [logging_output]
             if is_dummy_batch:
-                sample_size = 0
+                sample_size *= 0  # multiply by 0 to preserve device
 
         # gather logging outputs from all replicas
         if self.args.distributed_world_size > 1:
