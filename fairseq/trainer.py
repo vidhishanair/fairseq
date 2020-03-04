@@ -40,6 +40,9 @@ class Trainer(object):
         self.args = args
         self.task = task
 
+        # catalog shared parameters
+        shared_params = _catalog_shared_params(model)
+
         self.tpu = getattr(args, 'tpu', False)
         self.cuda = torch.cuda.is_available() and not args.cpu and not self.tpu
         if self.cuda:
@@ -49,7 +52,7 @@ class Trainer(object):
         else:
             self.device = torch.device('cpu')
 
-        # copy model and criterion to current device
+        # copy model and criterion to current device/dtype
         self._criterion = criterion
         self._model = model
         if args.fp16:
@@ -60,6 +63,15 @@ class Trainer(object):
             self._model = self._model.to(dtype=torch.bfloat16)
         self._criterion = self._criterion.to(device=self.device)
         self._model = self._model.to(device=self.device)
+
+        # check that shared parameters are preserved after device transfer
+        for shared_param in shared_params:
+            ref = _get_module_by_path(self._model, shared_param[0])
+            for path in shared_param[1:]:
+                logger.info(
+                    'detected shared parameter: {} <- {}'.format(shared_param[0], path)
+                )
+                _set_module_by_path(self._model, path, ref)
 
         self._dummy_batch = "DUMMY"  # indicates we don't have a dummy batch at first
         self._lr_scheduler = None
@@ -782,3 +794,37 @@ class Trainer(object):
                 if key_to_delete in logging_output:
                     del logging_output[key_to_delete]
             return logging_output
+
+
+def _catalog_shared_params(module, memo=None, prefix=''):
+    if memo is None:
+        first_call = True
+        memo = {}
+    else:
+        first_call = False
+    for name, param in module._parameters.items():
+        param_prefix = prefix + ('.' if prefix else '') + name
+        if param not in memo:
+            memo[param] = []
+        memo[param].append(param_prefix)
+    for name, m in module._modules.items():
+        if m is None:
+            continue
+        submodule_prefix = prefix + ('.' if prefix else '') + name
+        _catalog_shared_params(m, memo, submodule_prefix)
+    if first_call:
+        return [x for x in memo.values() if len(x) > 1]
+
+
+def _get_module_by_path(module, path):
+    path = path.split('.')
+    for name in path:
+        module = getattr(module, name)
+    return module
+
+
+def _set_module_by_path(module, path, value):
+    path = path.split('.')
+    for name in path[:-1]:
+        module = getattr(module, name)
+    setattr(module, path[-1], value)
