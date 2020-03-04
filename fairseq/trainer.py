@@ -400,8 +400,7 @@ class Trainer(object):
         try:
             if self.tpu and self.args.distributed_world_size > 1:
                 import torch_xla.core.xla_model as xm
-                gradients = xm._fetch_gradients(self.optimizer.optimizer)
-                xm.all_reduce('sum', gradients, scale=1.0 / self.args.distributed_world_size)
+                xm.reduce_gradients(self.optimizer.optimizer)
 
             # multiply gradients by (# GPUs / sample_size) since DDP
             # already normalizes by the number of GPUs. Thus we get
