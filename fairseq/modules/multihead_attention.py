@@ -465,10 +465,10 @@ class MultiheadAttention(nn.Module):
     #        state_dict[key] = value
 
     def in_proj_qkv(self, query):
-        #return self._in_proj(query).chunk(3, dim=-1)
-        x = self._in_proj(query)
-        sz = self.embed_dim
-        return x[:, :, :sz], x[:, :, sz:2*sz], x[:, :, -sz:]
+        return self._in_proj(query).chunk(3, dim=-1)
+        #x = self._in_proj(query)
+        #sz = self.embed_dim
+        #return x[:, :, :sz], x[:, :, sz:2*sz], x[:, :, -sz:]
 
     def in_proj_q(self, query):
         raise Exception
