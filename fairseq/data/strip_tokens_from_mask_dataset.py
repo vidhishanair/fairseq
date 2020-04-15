@@ -16,4 +16,4 @@ class StripTokenFromMaskDataset(BaseWrapperDataset):
     def __getitem__(self, index):
         item = self.dataset[index]
         base_item = self.base_dataset[index]
-        return item[base_item.ne(self.id_to_strip)]
+        return item[base_item.ne(self.id_to_strip).repeat(item.size(0), 1)]
