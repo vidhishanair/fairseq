@@ -35,9 +35,11 @@ def collate(
             return False
         return True
 
-    def collate_sentid_tokens(key, pad_idx, eos_idx=None, left_pad=False, move_eos_to_beginning=False):
+    def collate_sentid_tokens(key, left_pad=False, move_eos_to_beginning=False):
         """Convert a list of 2d sent id tensors into a padded 3d tensor."""
         values = [s[key] for s in samples]
+        print('here')
+        print(values[0].size())
         max_src_sents = max(v.size(0) for v in values)
         max_src_words = max(v.size(0) for v in values)
         res = values[0].new(len(values), max_src_sents, max_src_words).fill_(pad_idx)
@@ -52,6 +54,10 @@ def collate(
                 dst.copy_(src)
 
         for i, v in enumerate(values):
+            print(v.size())
+            print(res[i].size())
+            print(res[i][:v.size(0)].size())
+            print((res[i][:v.size(0)][max_src_words - v.size(1):]).size())
             copy_tensor(v, res[i][:v.size(0)][max_src_words - v.size(1):] if left_pad else res[i][:v.size(1)])
         return res
 

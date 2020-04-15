@@ -93,9 +93,13 @@ def load_langpair_dataset(
         # src_dataset = data_utils.load_indexed_dataset(prefix + 'source_sentids', src_dict, dataset_impl)
         sent_id_dataset = []
         sent_sizes = []
-        with open(prefix + 'source_sentids.txt', 'r', encoding='utf-8') as f:
+        with open(prefix + 'source.sentids', 'r', encoding='utf-8') as f:
+            print(prefix + 'source.sentids')
             for line in f:
+                #print(line.strip('\n'))
                 data = line.strip('\n').split(" ")
+                #if data == ['']:
+                #    continue
                 data = list(map(int, data))
                 data.append(data[-1])
                 no_sents = data[-1]+1
@@ -114,6 +118,7 @@ def load_langpair_dataset(
                     max_source_positions - 1,
                     )
             )
+        print(len(sent_id_dataset))
         sent_id_datasets.append(sent_id_dataset)
 
         tgt_dataset = data_utils.load_indexed_dataset(prefix + tgt, tgt_dict, dataset_impl)
