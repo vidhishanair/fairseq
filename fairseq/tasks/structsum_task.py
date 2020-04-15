@@ -26,7 +26,7 @@ from fairseq.data import (
     StripTokenDataset,
     StripTokenFromMaskDataset,
     TruncateDataset,
-)
+    ListDataset)
 from fairseq.data.structsum_dataset import StructSumDataset
 
 from fairseq.tasks import FairseqTask, register_task
@@ -92,6 +92,7 @@ def load_langpair_dataset(
 
         # src_dataset = data_utils.load_indexed_dataset(prefix + 'source_sentids', src_dict, dataset_impl)
         sent_id_dataset = []
+        sent_sizes = []
         with open(prefix + 'source_sentids.txt', 'r', encoding='utf-8') as f:
             for line in f:
                 data = line.strip('\n').split(" ")
@@ -104,6 +105,8 @@ def load_langpair_dataset(
                 for id in range(no_sents):
                     one_hot_data[id, data.eq(id)] = 1
                 sent_id_dataset.append(torch.from_numpy(one_hot_data))
+                sent_sizes.append(no_words)
+        sent_id_dataset = ListDataset(sent_id_dataset, sent_sizes)
         if truncate_source:
             sent_id_dataset = AppendLastTokenDataset(
                 TruncateDataset(
