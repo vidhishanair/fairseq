@@ -74,6 +74,11 @@ class BARTModel(TransformerModel):
             src_lengths=src_lengths,
             **kwargs,
         )
+        print(src_tokens.size())
+        print(src_lengths.size())
+        print(src_lengths)
+        print(encoder_out.encoder_out.size())
+        exit()
         x, extra = self.decoder(
             prev_output_tokens,
             encoder_out=encoder_out,
