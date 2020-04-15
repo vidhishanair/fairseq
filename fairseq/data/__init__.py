@@ -9,6 +9,7 @@ from .fairseq_dataset import FairseqDataset, FairseqIterableDataset
 
 from .base_wrapper_dataset import BaseWrapperDataset
 
+from .append_last_token_dataset import AppendLastTokenDataset
 from .append_token_dataset import AppendTokenDataset
 from .audio.raw_audio_dataset import FileAudioDataset
 from .backtranslation_dataset import BacktranslationDataset
@@ -33,6 +34,7 @@ from .offset_tokens_dataset import OffsetTokensDataset
 from .pad_dataset import LeftPadDataset, PadDataset, RightPadDataset
 from .prepend_dataset import PrependDataset
 from .prepend_token_dataset import PrependTokenDataset
+from .prepend_first_token_dataset import PrependFirstTokenDataset
 from .raw_label_dataset import RawLabelDataset
 from .replace_dataset import ReplaceDataset
 from .resampling_dataset import ResamplingDataset
@@ -40,6 +42,7 @@ from .roll_dataset import RollDataset
 from .round_robin_zip_datasets import RoundRobinZipDatasets
 from .sort_dataset import SortDataset
 from .strip_token_dataset import StripTokenDataset
+from .strip_tokens_from_mask_dataset import StripTokenFromMaskDataset
 from .subsample_dataset import SubsampleDataset
 from .token_block_dataset import TokenBlockDataset
 from .transform_eos_dataset import TransformEosDataset
@@ -54,6 +57,7 @@ from .iterators import (
 )
 
 __all__ = [
+    'AppendLastTokenDataset',
     'AppendTokenDataset',
     'BacktranslationDataset',
     'BaseWrapperDataset',
@@ -88,6 +92,7 @@ __all__ = [
     'PadDataset',
     'PrependDataset',
     'PrependTokenDataset',
+    'PrependFirstTokenDataset',
     'ReplaceDataset',
     'RollDataset',
     'FileAudioDataset',
@@ -98,6 +103,7 @@ __all__ = [
     'ShardedIterator',
     'SortDataset',
     'StripTokenDataset',
+    'StripTokenFromMaskDataset',
     'SubsampleDataset',
     'TokenBlockDataset',
     'TransformEosDataset',
