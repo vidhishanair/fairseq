@@ -46,6 +46,12 @@ def main():
         help="path to save encoded outputs",
     )
     parser.add_argument(
+        "--sent_outputs",
+        nargs="+",
+        default=['-'],
+        help="path to save encoded outputs",
+    )
+    parser.add_argument(
         "--keep-empty",
         action="store_true",
         help="keep empty lines",
