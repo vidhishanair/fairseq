@@ -17,7 +17,7 @@ class AppendLastTokenDataset(BaseWrapperDataset):
 
     def __getitem__(self, idx):
         item = self.dataset[idx]
-        item = torch.cat([item, item.new([item[-1]])])
+        item = torch.cat([item, item[:,-1].unsqueeze(1)], dim=1)
         return item
 
     @property

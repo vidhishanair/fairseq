@@ -26,7 +26,7 @@ from fairseq.data import (
     StripTokenDataset,
     StripTokenFromMaskDataset,
     TruncateDataset,
-    ListDataset)
+    ListDataset, TruncateNDimDataset)
 from fairseq.data.structsum_dataset import StructSumDataset
 
 from fairseq.tasks import FairseqTask, register_task
@@ -113,7 +113,7 @@ def load_langpair_dataset(
         sent_id_dataset = ListDataset(sent_id_dataset, sent_sizes)
         if truncate_source:
             sent_id_dataset = AppendLastTokenDataset(
-                TruncateDataset(
+                TruncateNDimDataset(
                     StripTokenFromMaskDataset(sent_id_dataset, pre_src_dataset, src_dict.eos()),
                     max_source_positions - 1,
                     )

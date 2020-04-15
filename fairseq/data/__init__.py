@@ -48,6 +48,7 @@ from .token_block_dataset import TokenBlockDataset
 from .transform_eos_dataset import TransformEosDataset
 from .transform_eos_lang_pair_dataset import TransformEosLangPairDataset
 from .truncate_dataset import TruncateDataset
+from .truncate_ndim_dataset import TruncateNDimDataset
 
 from .iterators import (
     CountingIterator,
@@ -109,5 +110,6 @@ __all__ = [
     'TransformEosDataset',
     'TransformEosLangPairDataset',
     'TruncateDataset',
+    'TruncateNDimDataset',
     'TruncatedDictionary',
 ]
