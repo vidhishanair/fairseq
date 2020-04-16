@@ -47,7 +47,7 @@ class SentIdsRawDataset(FairseqDataset):
         self.sizes = []
         self.append_eos = append_eos
         self.read_data(path)
-        self.size = len(self.tokens_list)
+        self.size = len(self.sentids)
 
     def read_data(self, path):
         with open(path, 'r', encoding='utf-8') as f:
