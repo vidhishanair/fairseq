@@ -117,7 +117,7 @@ def load_langpair_dataset(
             sent_id_dataset = AppendLastTokenDataset(
                 TruncateNDimDataset(
                     StripTokenFromMaskDataset(sent_id_dataset, pre_src_dataset, src_dict.eos()),
-                    max_source_positions - 1,
+                    max_source_positions - 1, dim=1
                     )
             )
         print(len(sent_id_dataset))

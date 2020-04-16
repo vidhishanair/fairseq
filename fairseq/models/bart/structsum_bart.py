@@ -20,6 +20,7 @@ from fairseq.models import (
 from .structured_attention import StructuredAttention
 from fairseq.models.transformer import TransformerModel
 from fairseq.modules.transformer_sentence_encoder import init_bert_params
+from fairseq.models.fairseq_encoder import EncoderOut
 
 from .hub_interface import BARTHubInterface
 
@@ -49,6 +50,7 @@ class StructSumBARTModel(TransformerModel):
         self.structure_att = StructuredAttention(sent_hiddent_size=self.args.encoder_embed_dim,
                                                  bidirectional=False,
                                                  py_version='nightly')
+        self.str_to_enc_linear = nn.Linear(self.args.encoder_embed_dim//2+self.args.encoder_embed_dim, self.args.encoder_embed_dim)
 
     @staticmethod
     def add_args(parser):
@@ -79,9 +81,25 @@ class StructSumBARTModel(TransformerModel):
             src_lengths=src_lengths,
             **kwargs,
         )
-        sent_level_encoder_out = torch.bmm(src_sent_mask, encoder_out.permute(1,0,2))
+        #print('src_tokens: '+str(src_tokens.size()))
+        #print(src_sent_mask.size(), encoder_out.encoder_out.size())
+        enc_out = encoder_out.encoder_out.permute(1,0,2)
+        sent_level_encoder_out = torch.bmm(src_sent_mask.float(), enc_out)
         sent_str_att_out, sent_str_att = self.structure_att(sent_level_encoder_out)
-        print(sent_str_att_out.size())
+        sent_str_att_out = torch.bmm(src_sent_mask.permute(0,2,1).float(), sent_str_att_out)
+        #print(enc_out.size(), sent_str_att_out.size())
+        str_att_enc_out = self.str_to_enc_linear(torch.cat([enc_out, sent_str_att_out], dim=2))
+        str_att_enc_out = str_att_enc_out.permute(1,0,2)
+        #encoder_out.encoder_out = str_att_enc_out
+        encoder_out = EncoderOut(
+            encoder_out=str_att_enc_out,  # T x B x C
+            encoder_padding_mask=encoder_out.encoder_padding_mask,  # B x T
+            encoder_embedding=encoder_out.encoder_embedding,  # B x T x C
+            encoder_states=encoder_out.encoder_states,  # List[T x B x C]
+            src_tokens=encoder_out.src_tokens,
+            src_lengths=encoder_out.src_lengths,
+        ) 
+        #print(str_att_enc_out.size())
         x, extra = self.decoder(
             prev_output_tokens,
             encoder_out=encoder_out,

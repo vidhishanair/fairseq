@@ -19,11 +19,13 @@ class TruncateNDimDataset(BaseWrapperDataset):
 
     def __getitem__(self, index):
         item = self.dataset[index]
+        #print('pre truncate: '+str(item.size()))
         item_len = item.size(self.dim)
         item_len_sizes = [self.truncation_length if (idx == self.dim and item.size(idx) > self.truncation_length) else item.size(idx)
                           for idx in range(len(list(item.size())))]
         if item_len > self.truncation_length:
-            item = item[:item_len_sizes[0], :item_len_sizes[1], :item_len_sizes[2]]
+            item = item[:item_len_sizes[0], :item_len_sizes[1]]
+        #print('post truncate: '+str(item.size()))
         return item
 
     @property
