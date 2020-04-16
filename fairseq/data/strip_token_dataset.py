@@ -14,4 +14,6 @@ class StripTokenDataset(BaseWrapperDataset):
 
     def __getitem__(self, index):
         item = self.dataset[index]
+        #print('in src_token strip pre : '+str(item.size()))
+        #print('in src_token strip post : '+str((item[item.ne(self.id_to_strip)]).size()))
         return item[item.ne(self.id_to_strip)]

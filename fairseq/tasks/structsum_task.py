@@ -78,7 +78,9 @@ def load_langpair_dataset(
                     ),
                 src_dict.eos(),
             )
-        src_datasets.append(pre_src_dataset)
+            src_datasets.append(src_dataset)
+        else:
+            src_datasets.append(pre_src_dataset)
 
         if split_exists(split_k, src, tgt, src, data_path):
             prefix = os.path.join(data_path, '{}.{}-{}.'.format(split_k, src, tgt))

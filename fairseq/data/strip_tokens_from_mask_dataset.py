@@ -3,6 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import torch
 from . import BaseWrapperDataset
 
 
@@ -15,7 +16,8 @@ class StripTokenFromMaskDataset(BaseWrapperDataset):
 
     def __getitem__(self, index):
         item = self.dataset[index]
-        base_item = self.base_dataset[index]
-        print('strip tokens')
-        print((item[base_item.ne(self.id_to_strip).repeat(item.size(0), 1)]).size())
-        return item[base_item.ne(self.id_to_strip).repeat(item.size(0), 1)]
+        base_item = self.base_dataset[index].ne(self.id_to_strip)
+        #print('base_item : '+str(base_item.size()))
+        #print('final item pre : '+str(item.size()))
+        #print('final item : '+str(torch.cat([item[i][base_item].unsqueeze(0) for i in range(item.size(0))], dim=0).size()))
+        return torch.cat([item[i][base_item].unsqueeze(0) for i in range(item.size(0))], dim=0)

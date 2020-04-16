@@ -64,7 +64,7 @@ class BARTModel(TransformerModel):
 
     def forward(
         self, src_tokens, src_lengths, prev_output_tokens,
-        features_only=False, classification_head_name=None, **kwargs
+        features_only=False, classification_head_name=None, src_sent_mask=None, **kwargs
     ):
         if classification_head_name is not None:
             features_only = True
@@ -74,11 +74,10 @@ class BARTModel(TransformerModel):
             src_lengths=src_lengths,
             **kwargs,
         )
-        print(src_tokens.size())
-        print(src_lengths.size())
-        print(src_lengths)
-        print(encoder_out.encoder_out.size())
-        exit()
+        #print('src_tokens: '+str(src_tokens.size()))
+        #print('src_len: '+str(src_lengths.size()))
+        #print('src_sent_mask: '+str(src_sent_mask.size()))
+        #print('enc_out: '+str(encoder_out.encoder_out.size()))
         x, extra = self.decoder(
             prev_output_tokens,
             encoder_out=encoder_out,
