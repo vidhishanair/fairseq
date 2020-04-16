@@ -50,20 +50,23 @@ class SentIdsRawDataset(FairseqDataset):
         self.size = len(self.sentids)
 
     def read_data(self, path):
-        with open(path, 'r', encoding='utf-8') as f:
-            for line in f:
-                data = line.strip('\n').split(" ")
-                data = list(map(int, data))
-                no_sents = data[-1]
-                if self.append_eos:
-                    data.append(data[-1])
-                no_words = len(data)
-                data = torch.LongTensor(data)
-                one_hot_data = np.zeros((no_sents, no_words))
-                for id in range(no_sents):
-                    one_hot_data[id, data.eq(id)] = 1
-                self.sentids.append(torch.from_numpy(one_hot_data))
-                self.sizes.append(no_words)
+        # with open(path, 'r', encoding='utf-8') as f:
+        #     for line in f:
+        #         data = line.strip('\n').split(" ")
+        #         data = list(map(int, data))
+        #         no_sents = data[-1]
+        #         if self.append_eos:
+        #             data.append(data[-1])
+        #         no_words = len(data)
+        #         data = torch.LongTensor(data)
+        #         one_hot_data = np.zeros((no_sents, no_words))
+        #         for id in range(no_sents):
+        #             one_hot_data[id, data.eq(id)] = 1
+        #         self.sentids.append(torch.from_numpy(one_hot_data))
+        #         self.sizes.append(no_words)
+        obj = torch.load(path)
+        self.sentids = obj['sent_id_dataset']
+        self.sizes = obj['sent_sizes']
         # with open(path, 'r', encoding='utf-8') as f:
         #     for line in f:
         #         self.lines.append(line.strip('\n'))
@@ -163,7 +166,7 @@ def load_langpair_dataset(
         # src_dataset = data_utils.load_indexed_dataset(prefix + 'source_sentids', src_dict, dataset_impl)
         # sent_id_dataset = []
         # sent_sizes = []
-        sent_id_dataset = SentIdsRawDataset(prefix + 'source.sentids')
+        sent_id_dataset = SentIdsRawDataset(prefix + 'source.sentids.pt')
         # with open(prefix + 'source.sentids', 'r', encoding='utf-8') as f:
         #     print(prefix + 'source.sentids')
         #     for line in f:
