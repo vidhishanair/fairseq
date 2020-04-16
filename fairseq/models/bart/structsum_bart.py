@@ -132,7 +132,7 @@ class StructSumBARTModel(TransformerModel):
                         name, num_classes, prev_num_classes, inner_dim, prev_inner_dim
                     )
                 )
-        self.classification_heads[name] = BARTClassificationHead(
+        self.classification_heads[name] = StructSumBARTClassificationHead(
             self.args.encoder_embed_dim,
             inner_dim or self.args.encoder_embed_dim,
             num_classes,
@@ -196,7 +196,7 @@ class StructSumBARTModel(TransformerModel):
                     state_dict[prefix + 'classification_heads.' + k] = v
 
 
-class BARTClassificationHead(nn.Module):
+class StructSumBARTClassificationHead(nn.Module):
     """Head for sentence-level classification tasks."""
 
     def __init__(
@@ -224,7 +224,7 @@ class BARTClassificationHead(nn.Module):
 
 
 @register_model_architecture('structsum_bart', 'structsum_bart_large')
-def bart_large_architecture(args):
+def structsum_bart_large_architecture(args):
     args.encoder_embed_path = getattr(args, 'encoder_embed_path', None)
     args.encoder_embed_dim = getattr(args, 'encoder_embed_dim', 1024)
     args.encoder_ffn_embed_dim = getattr(args, 'encoder_ffn_embed_dim', 4*1024)
@@ -261,14 +261,14 @@ def bart_large_architecture(args):
 
 
 @register_model_architecture('structsum_bart', 'structsum_bart_base')
-def bart_base_architecture(args):
+def structsum_bart_base_architecture(args):
     args.encoder_embed_dim = getattr(args, 'encoder_embed_dim', 768)
     args.encoder_ffn_embed_dim = getattr(args, 'encoder_ffn_embed_dim', 4*768)
     args.encoder_layers = getattr(args, 'encoder_layers', 6)
     args.encoder_attention_heads = getattr(args, 'encoder_attention_heads', 12)
     args.decoder_layers = getattr(args, 'decoder_layers', 6)
     args.decoder_attention_heads = getattr(args, 'decoder_attention_heads', 12)
-    bart_large_architecture(args)
+    structsum_bart_large_architecture(args)
 
 
 # @register_model_architecture('bart', 'mbart_large')
