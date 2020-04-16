@@ -10,6 +10,7 @@ import logging
 import os
 import torch
 
+from functools import lru_cache
 import numpy as np
 
 from fairseq import metrics, options, utils
@@ -26,7 +27,7 @@ from fairseq.data import (
     StripTokenDataset,
     StripTokenFromMaskDataset,
     TruncateDataset,
-    ListDataset, TruncateNDimDataset)
+    ListDataset, TruncateNDimDataset, FairseqDataset)
 from fairseq.data.structsum_dataset import StructSumDataset
 
 from fairseq.tasks import FairseqTask, register_task
@@ -35,6 +36,73 @@ EVAL_BLEU_ORDER = 4
 
 
 logger = logging.getLogger(__name__)
+
+
+class SentIdsRawDataset(FairseqDataset):
+    """Takes a text file as input and binarizes it in memory at instantiation.
+    Original lines are also kept in memory"""
+
+    def __init__(self, path, append_eos=True):
+        self.sentids = []
+        self.sizes = []
+        self.append_eos = append_eos
+        self.read_data(path)
+        self.size = len(self.tokens_list)
+
+    def read_data(self, path):
+        with open(path, 'r', encoding='utf-8') as f:
+            for line in f:
+                data = line.strip('\n').split(" ")
+                data = list(map(int, data))
+                no_sents = data[-1]
+                if self.append_eos:
+                    data.append(data[-1])
+                no_words = len(data)
+                data = torch.LongTensor(data)
+                one_hot_data = np.zeros((no_sents, no_words))
+                for id in range(no_sents):
+                    one_hot_data[id, data.eq(id)] = 1
+                self.sentids.append(torch.from_numpy(one_hot_data))
+                self.sizes.append(no_words)
+        # with open(path, 'r', encoding='utf-8') as f:
+        #     for line in f:
+        #         self.lines.append(line.strip('\n'))
+        #         tokens = dictionary.encode_line(
+        #             line, add_if_not_exist=False,
+        #             append_eos=self.append_eos, reverse_order=self.reverse_order,
+        #         ).long()
+        #         self.tokens_list.append(tokens)
+        #         self.sizes.append(len(tokens))
+        self.sizes = np.array(self.sizes)
+
+    def check_index(self, i):
+        if i < 0 or i >= self.size:
+            raise IndexError('index out of range')
+
+    @lru_cache(maxsize=8)
+    def __getitem__(self, i):
+        self.check_index(i)
+        return self.sentids[i]
+
+    # def get_original_text(self, i):
+    #     self.check_index(i)
+    #     return self.lines[i]
+
+    def __del__(self):
+        pass
+
+    def __len__(self):
+        return self.size
+
+    def num_tokens(self, index):
+        return self.sizes[index]
+
+    def size(self, index):
+        return self.sizes[index]
+
+    @staticmethod
+    def exists(path):
+        return os.path.exists(path)
 
 
 def load_langpair_dataset(
@@ -93,26 +161,28 @@ def load_langpair_dataset(
                 raise FileNotFoundError('Dataset not found: {} ({})'.format(split, data_path))
 
         # src_dataset = data_utils.load_indexed_dataset(prefix + 'source_sentids', src_dict, dataset_impl)
-        sent_id_dataset = []
-        sent_sizes = []
-        with open(prefix + 'source.sentids', 'r', encoding='utf-8') as f:
-            print(prefix + 'source.sentids')
-            for line in f:
-                #print(line.strip('\n'))
-                data = line.strip('\n').split(" ")
-                #if data == ['']:
-                #    continue
-                data = list(map(int, data))
-                data.append(data[-1])
-                no_sents = data[-1]+1
-                no_words = len(data)
-                data = torch.LongTensor(data)
-                one_hot_data = np.zeros((no_sents, no_words))
-                for id in range(no_sents):
-                    one_hot_data[id, data.eq(id)] = 1
-                sent_id_dataset.append(torch.from_numpy(one_hot_data))
-                sent_sizes.append(no_words)
-        sent_id_dataset = ListDataset(sent_id_dataset, sent_sizes)
+        # sent_id_dataset = []
+        # sent_sizes = []
+        sent_id_dataset = SentIdsRawDataset(prefix + 'source.sentids')
+        # with open(prefix + 'source.sentids', 'r', encoding='utf-8') as f:
+        #     print(prefix + 'source.sentids')
+        #     for line in f:
+        #         #print(line.strip('\n'))
+        #         data = line.strip('\n').split(" ")
+        #         #if data == ['']:
+        #         #    continue
+        #         data = list(map(int, data))
+        #         data.append(data[-1])
+        #         no_sents = data[-1]+1
+        #         no_words = len(data)
+        #         data = torch.LongTensor(data)
+        #         one_hot_data = np.zeros((no_sents, no_words))
+        #         for id in range(no_sents):
+        #             one_hot_data[id, data.eq(id)] = 1
+        #         sent_id_dataset.append(torch.from_numpy(one_hot_data))
+        #         sent_sizes.append(no_words)
+        # sent_id_dataset = ListDataset(sent_id_dataset, sent_sizes)
+
         if truncate_source:
             sent_id_dataset = AppendLastTokenDataset(
                 TruncateNDimDataset(
@@ -120,7 +190,7 @@ def load_langpair_dataset(
                     max_source_positions - 1, dim=1
                     )
             )
-        print(len(sent_id_dataset))
+        # print(len(sent_id_dataset))
         sent_id_datasets.append(sent_id_dataset)
 
         tgt_dataset = data_utils.load_indexed_dataset(prefix + tgt, tgt_dict, dataset_impl)
