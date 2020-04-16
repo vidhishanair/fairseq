@@ -3,7 +3,7 @@ import numpy as np
 
 for subset in ['train', 'val', 'test']:
     print('Processing '+subset)
-    prefix = subset+'.source-target.'
+    prefix = '/remote/bones/user/public/vbalacha/bart_cnndm_preprocessing/cnn-dailymail/cnn_dm_test/' + subset+'.source-target.'
     sent_id_dataset = []
     sent_sizes = []
     with open(prefix + 'source.sentids', 'r', encoding='utf-8') as f:
