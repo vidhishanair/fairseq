@@ -9,6 +9,7 @@ Natural Language Generation, Translation, and Comprehension
 
 import logging
 
+import torch
 import torch.nn as nn
 
 from fairseq import utils
@@ -16,6 +17,7 @@ from fairseq.models import (
     register_model,
     register_model_architecture,
 )
+from .structured_attention import StructuredAttention
 from fairseq.models.transformer import TransformerModel
 from fairseq.modules.transformer_sentence_encoder import init_bert_params
 
@@ -25,8 +27,8 @@ from .hub_interface import BARTHubInterface
 logger = logging.getLogger(__name__)
 
 
-@register_model('bart')
-class BARTModel(TransformerModel):
+@register_model('structsum_bart')
+class StructSumBARTModel(TransformerModel):
 
     @classmethod
     def hub_models(cls):
@@ -44,10 +46,13 @@ class BARTModel(TransformerModel):
         self.apply(init_bert_params)
 
         self.classification_heads = nn.ModuleDict()
+        self.structure_att = StructuredAttention(sent_hiddent_size=self.args.encoder_embed_dim,
+                                                 bidirectional=False,
+                                                 py_version='nightly')
 
     @staticmethod
     def add_args(parser):
-        super(BARTModel, BARTModel).add_args(parser)
+        super(StructSumBARTModel, StructSumBARTModel).add_args(parser)
         parser.add_argument(
             '--pooler-dropout', type=float, metavar='D',
             help='dropout probability in the masked_lm pooler layers'
@@ -63,8 +68,8 @@ class BARTModel(TransformerModel):
         return {'self'}
 
     def forward(
-        self, src_tokens, src_lengths, prev_output_tokens,
-        features_only=False, classification_head_name=None, src_sent_mask=None, **kwargs
+            self, src_tokens, src_lengths, prev_output_tokens,
+            features_only=False, classification_head_name=None, src_sent_mask=None, **kwargs
     ):
         if classification_head_name is not None:
             features_only = True
@@ -74,7 +79,9 @@ class BARTModel(TransformerModel):
             src_lengths=src_lengths,
             **kwargs,
         )
-
+        sent_level_encoder_out = torch.bmm(src_sent_mask, encoder_out.permute(1,0,2))
+        sent_str_att_out, sent_str_att = self.structure_att(sent_level_encoder_out)
+        print(sent_str_att_out.size())
         x, extra = self.decoder(
             prev_output_tokens,
             encoder_out=encoder_out,
@@ -84,8 +91,8 @@ class BARTModel(TransformerModel):
 
         if classification_head_name is not None:
             sentence_representation = x[
-                src_tokens.eq(self.encoder.dictionary.eos()), :
-            ].view(x.size(0), -1, x.size(-1))[:, -1, :]
+                                      src_tokens.eq(self.encoder.dictionary.eos()), :
+                                      ].view(x.size(0), -1, x.size(-1))[:, -1, :]
             x = self.classification_heads[classification_head_name](
                 sentence_representation
             )
@@ -93,12 +100,12 @@ class BARTModel(TransformerModel):
 
     @classmethod
     def from_pretrained(
-        cls,
-        model_name_or_path,
-        checkpoint_file='model.pt',
-        data_name_or_path='.',
-        bpe='gpt2',
-        **kwargs,
+            cls,
+            model_name_or_path,
+            checkpoint_file='model.pt',
+            data_name_or_path='.',
+            bpe='gpt2',
+            **kwargs,
     ):
         from fairseq import hub_utils
         x = hub_utils.from_pretrained(
@@ -131,7 +138,7 @@ class BARTModel(TransformerModel):
             num_classes,
             self.args.pooler_activation_fn,
             self.args.pooler_dropout,
-        )
+            )
 
     def upgrade_state_dict_named(self, state_dict, name):
         super().upgrade_state_dict_named(state_dict, name)
@@ -161,8 +168,8 @@ class BARTModel(TransformerModel):
                     )
                     keys_to_delete.append(k)
                 elif (
-                    num_classes != self.classification_heads[head_name].out_proj.out_features
-                    or inner_dim != self.classification_heads[head_name].dense.out_features
+                        num_classes != self.classification_heads[head_name].out_proj.out_features
+                        or inner_dim != self.classification_heads[head_name].dense.out_features
                 ):
                     logger.warning(
                         'deleting classification head ({}) from checkpoint '
@@ -193,12 +200,12 @@ class BARTClassificationHead(nn.Module):
     """Head for sentence-level classification tasks."""
 
     def __init__(
-        self,
-        input_dim,
-        inner_dim,
-        num_classes,
-        activation_fn,
-        pooler_dropout,
+            self,
+            input_dim,
+            inner_dim,
+            num_classes,
+            activation_fn,
+            pooler_dropout,
     ):
         super().__init__()
         self.dense = nn.Linear(input_dim, inner_dim)
@@ -216,7 +223,7 @@ class BARTClassificationHead(nn.Module):
         return x
 
 
-@register_model_architecture('bart', 'bart_large')
+@register_model_architecture('structsum_bart', 'structsum_bart_large')
 def bart_large_architecture(args):
     args.encoder_embed_path = getattr(args, 'encoder_embed_path', None)
     args.encoder_embed_dim = getattr(args, 'encoder_embed_dim', 1024)
@@ -253,7 +260,7 @@ def bart_large_architecture(args):
     args.pooler_dropout = getattr(args, 'pooler_dropout', 0.0)
 
 
-@register_model_architecture('bart', 'bart_base')
+@register_model_architecture('structsum_bart', 'structsum_bart_base')
 def bart_base_architecture(args):
     args.encoder_embed_dim = getattr(args, 'encoder_embed_dim', 768)
     args.encoder_ffn_embed_dim = getattr(args, 'encoder_ffn_embed_dim', 4*768)
@@ -264,19 +271,19 @@ def bart_base_architecture(args):
     bart_large_architecture(args)
 
 
-@register_model_architecture('bart', 'mbart_large')
-def mbart_large_architecture(args):
-    args.no_scale_embedding = getattr(args, 'no_scale_embedding', False)
-    bart_large_architecture(args)
-
-
-@register_model_architecture('bart', 'mbart_base')
-def mbart_base_architecture(args):
-    args.no_scale_embedding = getattr(args, 'no_scale_embedding', False)
-    bart_base_architecture(args)
-
-
-@register_model_architecture('bart', 'mbart_base_wmt20')
-def mbart_base_wmt20_architecture(args):
-    args.layernorm_embedding = getattr(args, 'layernorm_embedding', False)
-    mbart_base_architecture(args)
+# @register_model_architecture('bart', 'mbart_large')
+# def mbart_large_architecture(args):
+#     args.no_scale_embedding = getattr(args, 'no_scale_embedding', False)
+#     bart_large_architecture(args)
+#
+#
+# @register_model_architecture('bart', 'mbart_base')
+# def mbart_base_architecture(args):
+#     args.no_scale_embedding = getattr(args, 'no_scale_embedding', False)
+#     bart_base_architecture(args)
+#
+#
+# @register_model_architecture('bart', 'mbart_base_wmt20')
+# def mbart_base_wmt20_architecture(args):
+#     args.layernorm_embedding = getattr(args, 'layernorm_embedding', False)
+#     mbart_base_architecture(args)
