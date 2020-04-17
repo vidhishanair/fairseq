@@ -164,7 +164,6 @@ def train(args, trainer, task, epoch_itr, max_update=math.inf):
 
     # task specific setup per epoch
     task.begin_epoch(epoch_itr.epoch, trainer.get_model())
-
     valid_subsets = args.valid_subset.split(',')
     for samples in progress:
         with metrics.aggregate('train_inner'):
@@ -181,7 +180,6 @@ def train(args, trainer, task, epoch_itr, max_update=math.inf):
             # reset mid-epoch stats after each log interval
             # the end-of-epoch stats will still be preserved
             metrics.reset_meters('train_inner')
-
         valid_losses = validate_and_save(args, trainer, task, epoch_itr, valid_subsets)
         if should_stop_early(args, valid_losses[0]) or num_updates >= max_update:
             break

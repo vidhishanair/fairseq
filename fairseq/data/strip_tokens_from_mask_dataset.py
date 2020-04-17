@@ -19,5 +19,6 @@ class StripTokenFromMaskDataset(BaseWrapperDataset):
         base_item = self.base_dataset[index].ne(self.id_to_strip)
         #print('base_item : '+str(base_item.size()))
         #print('final item pre : '+str(item.size()))
+        #print([item[i][base_item].unsqueeze(0).size() for i in range(item.size(0))])
         #print('final item : '+str(torch.cat([item[i][base_item].unsqueeze(0) for i in range(item.size(0))], dim=0).size()))
         return torch.cat([item[i][base_item].unsqueeze(0) for i in range(item.size(0))], dim=0)
