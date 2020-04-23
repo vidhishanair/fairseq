@@ -1,6 +1,7 @@
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
+import numpy as np
 
 from .bilinear_matrix_attention import BilinearMatrixAttention
 
@@ -53,8 +54,8 @@ class StructuredAttention(nn.Module):
         # tp = tp.unsqueeze(2).expand(tp.size(0), tp.size(1), tp.size(1), tp.size(2)).contiguous()
         # tc = tc.unsqueeze(2).expand(tc.size(0), tc.size(1), tc.size(1), tc.size(2)).contiguous()
 
-        f_ij = self.bilinear(tp, tc).view(batch_size, token_size, token_size) #.squeeze() # b*s, token , token
-        f_i = torch.exp(self.fi_linear(str_v)).view(batch_size, token_size)  # b*s, token
+        f_ij = F.tanh(self.bilinear(tp, tc).view(batch_size, token_size, token_size)) #.squeeze() # b*s, token , token
+        f_i = torch.exp(F.tanh(self.fi_linear(str_v)).view(batch_size, token_size))  # b*s, token
 
         mask = f_ij.new_ones((f_ij.size(1), f_ij.size(1))) - f_ij.new_tensor(torch.eye(f_ij.size(1), f_ij.size(1)))
         mask = mask.unsqueeze(0).expand(f_ij.size(0), mask.size(0), mask.size(1)) #.to(self.device)
@@ -75,6 +76,10 @@ class StructuredAttention(nn.Module):
 
         #No batch inverse
         #LLinv = torch.stack([torch.inverse(li) for li in L_ij_bar])
+        #print(f_ij)
+        #print(L_ij_bar)
+        #print(np.linalg.det(L_ij_bar.data.cpu().numpy()))
+        #exit()
         LLinv = None
         if self.pytorch_version == 'nightly' or self.pytorch_version=='1.3.0':
             LLinv = torch.inverse(L_ij_bar)

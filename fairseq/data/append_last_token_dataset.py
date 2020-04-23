@@ -11,13 +11,15 @@ from . import BaseWrapperDataset
 
 class AppendLastTokenDataset(BaseWrapperDataset):
 
-    def __init__(self, dataset):
+    def __init__(self, dataset, split='None'):
         super().__init__(dataset)
         self._sizes = np.array(dataset.sizes) + 1
+        self.split = split
 
     def __getitem__(self, idx):
         item = self.dataset[idx]
         item = torch.cat([item, item[:,-1].unsqueeze(1)], dim=1)
+        #print(self.split+' src_sent_append: '+str(item.size()))
         return item
 
     @property

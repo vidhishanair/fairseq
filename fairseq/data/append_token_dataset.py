@@ -11,18 +11,20 @@ from . import BaseWrapperDataset
 
 class AppendTokenDataset(BaseWrapperDataset):
 
-    def __init__(self, dataset, token=None):
+    def __init__(self, dataset, token=None, split='None'):
         super().__init__(dataset)
         self.token = token
         if token is not None:
             self._sizes = np.array(dataset.sizes) + 1
         else:
             self._sizes = dataset.sizes
+        self.split = split
 
     def __getitem__(self, idx):
         item = self.dataset[idx]
         if self.token is not None:
             item = torch.cat([item, item.new([self.token])])
+        #print(self.split+' src_append: '+str(item.size()))
         return item
 
     @property

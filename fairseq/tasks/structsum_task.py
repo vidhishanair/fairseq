@@ -43,6 +43,7 @@ class SentIdsRawDataset(FairseqDataset):
     Original lines are also kept in memory"""
 
     def __init__(self, path, append_eos=True):
+        print(path)
         self.sentids = []
         self.sizes = []
         self.append_eos = append_eos
@@ -71,12 +72,13 @@ class SentIdsRawDataset(FairseqDataset):
         self.check_index(i)
         data = self.sentids[i]
         no_words = len(data)
-        no_sents = data[-1]
+        no_sents = data[-1]+1
         data = torch.LongTensor(data)
         one_hot_data = np.zeros((no_sents, no_words))
         for id in range(no_sents):
             one_hot_data[id, data.eq(id)] = 1
         data = torch.from_numpy(one_hot_data)
+        #print(data.size())
         return data
 
     # def get_original_text(self, i):
@@ -139,7 +141,7 @@ def load_langpair_dataset(
                     StripTokenDataset(pre_src_dataset, src_dict.eos()),
                     max_source_positions - 1,
                     ),
-                src_dict.eos(),
+                src_dict.eos(), split=split
             )
             src_datasets.append(src_dataset)
         else:
@@ -161,7 +163,7 @@ def load_langpair_dataset(
                 TruncateNDimDataset(
                     StripTokenFromMaskDataset(sent_id_dataset, pre_src_dataset, src_dict.eos()),
                     max_source_positions - 1, dim=1
-                    )
+                    ), split=split
             )
         sent_id_datasets.append(sent_id_dataset)
 
@@ -200,8 +202,8 @@ def load_langpair_dataset(
 
     eos = None
     if append_source_id:
-        src_dataset = AppendTokenDataset(src_dataset, src_dict.index('[{}]'.format(src)))
-        sent_id_dataset = AppendLastTokenDataset(sent_id_dataset)
+        src_dataset = AppendTokenDataset(src_dataset, src_dict.index('[{}]'.format(src)), split=split)
+        sent_id_dataset = AppendLastTokenDataset(sent_id_dataset, split=split)
         if tgt_dataset is not None:
             tgt_dataset = AppendTokenDataset(tgt_dataset, tgt_dict.index('[{}]'.format(tgt)))
         eos = tgt_dict.index('[{}]'.format(tgt))
@@ -221,7 +223,7 @@ def load_langpair_dataset(
         left_pad_target=left_pad_target,
         max_source_positions=max_source_positions,
         max_target_positions=max_target_positions,
-        align_dataset=align_dataset, eos=eos, src_sent_ids=sent_id_dataset
+        align_dataset=align_dataset, eos=eos, src_sent_ids=sent_id_dataset, split=split
     )
 
 
@@ -346,7 +348,7 @@ class StructSumTask(FairseqTask):
             upsample_primary=self.args.upsample_primary,
             left_pad_source=self.args.left_pad_source,
             left_pad_target=self.args.left_pad_target,
-            max_source_positions=self.args.max_source_positions,
+            max_source_positions=self.args.max_tokens,
             max_target_positions=self.args.max_target_positions,
             load_alignments=self.args.load_alignments,
             truncate_source=self.args.truncate_source,

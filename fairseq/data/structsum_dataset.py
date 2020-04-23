@@ -181,12 +181,13 @@ class StructSumDataset(FairseqDataset):
             shuffle=True, input_feeding=True,
             remove_eos_from_source=False, append_eos_to_target=False,
             align_dataset=None,
-            append_bos=False, eos=None, src_sent_ids=None
+            append_bos=False, eos=None, src_sent_ids=None, split='None'
     ):
         if tgt_dict is not None:
             assert src_dict.pad() == tgt_dict.pad()
             assert src_dict.eos() == tgt_dict.eos()
             assert src_dict.unk() == tgt_dict.unk()
+        self.split = split
         self.src = src
         self.tgt = tgt
         self.src_sent_ids = src_sent_ids
@@ -292,11 +293,14 @@ class StructSumDataset(FairseqDataset):
     def num_tokens(self, index):
         """Return the number of tokens in a sample. This value is used to
         enforce ``--max-tokens`` during batching."""
+        #print(self.split+' num_tokensl '+str((self.src_sizes[index], self.tgt_sizes[index] if self.tgt_sizes is not None else 0)))
+        #print(self.split+' num_tokens '+str(max(self.src_sizes[index], self.tgt_sizes[index] if self.tgt_sizes is not None else 0)))
         return max(self.src_sizes[index], self.tgt_sizes[index] if self.tgt_sizes is not None else 0)
 
     def size(self, index):
         """Return an example's size as a float or tuple. This value is used when
         filtering a dataset with ``--max-positions``."""
+        #print(self.split+' size '+str((self.src_sizes[index], self.tgt_sizes[index] if self.tgt_sizes is not None else 0)))
         return (self.src_sizes[index], self.tgt_sizes[index] if self.tgt_sizes is not None else 0)
 
     def ordered_indices(self):
