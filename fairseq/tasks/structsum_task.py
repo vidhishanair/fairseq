@@ -58,25 +58,8 @@ class SentIdsRawDataset(FairseqDataset):
                 if self.append_eos:
                     data.append(data[-1])
                 no_words = len(data)
-                # data = torch.LongTensor(data)
-                # one_hot_data = np.zeros((no_sents, no_words))
-                # for id in range(no_sents):
-                #     one_hot_data[id, data.eq(id)] = 1
-                # self.sentids.append(torch.from_numpy(one_hot_data))
                 self.sentids.append(data)
                 self.sizes.append(no_words)
-        # obj = torch.load(path)
-        # self.sentids = obj['sent_id_dataset']
-        # self.sizes = obj['sent_sizes']
-        # with open(path, 'r', encoding='utf-8') as f:
-        #     for line in f:
-        #         self.lines.append(line.strip('\n'))
-        #         tokens = dictionary.encode_line(
-        #             line, add_if_not_exist=False,
-        #             append_eos=self.append_eos, reverse_order=self.reverse_order,
-        #         ).long()
-        #         self.tokens_list.append(tokens)
-        #         self.sizes.append(len(tokens))
         self.sizes = np.array(self.sizes)
 
     def check_index(self, i):
@@ -172,29 +155,7 @@ def load_langpair_dataset(
             else:
                 raise FileNotFoundError('Dataset not found: {} ({})'.format(split, data_path))
 
-        # src_dataset = data_utils.load_indexed_dataset(prefix + 'source_sentids', src_dict, dataset_impl)
-        # sent_id_dataset = []
-        # sent_sizes = []
         sent_id_dataset = SentIdsRawDataset(prefix + 'source.sentids')
-        # with open(prefix + 'source.sentids', 'r', encoding='utf-8') as f:
-        #     print(prefix + 'source.sentids')
-        #     for line in f:
-        #         #print(line.strip('\n'))
-        #         data = line.strip('\n').split(" ")
-        #         #if data == ['']:
-        #         #    continue
-        #         data = list(map(int, data))
-        #         data.append(data[-1])
-        #         no_sents = data[-1]+1
-        #         no_words = len(data)
-        #         data = torch.LongTensor(data)
-        #         one_hot_data = np.zeros((no_sents, no_words))
-        #         for id in range(no_sents):
-        #             one_hot_data[id, data.eq(id)] = 1
-        #         sent_id_dataset.append(torch.from_numpy(one_hot_data))
-        #         sent_sizes.append(no_words)
-        # sent_id_dataset = ListDataset(sent_id_dataset, sent_sizes)
-
         if truncate_source:
             sent_id_dataset = AppendLastTokenDataset(
                 TruncateNDimDataset(
@@ -202,7 +163,6 @@ def load_langpair_dataset(
                     max_source_positions - 1, dim=1
                     )
             )
-        # print(len(sent_id_dataset))
         sent_id_datasets.append(sent_id_dataset)
 
         tgt_dataset = data_utils.load_indexed_dataset(prefix + tgt, tgt_dict, dataset_impl)

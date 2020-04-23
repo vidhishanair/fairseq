@@ -1,7 +1,7 @@
 import torch
-from fairseq.models.bart import BARTModel
-
-bart = BARTModel.from_pretrained(
+# from fairseq.models.bart import BARTModel
+from fairseq.models.bart import StructSumBARTModel
+bart = StructSumBARTModel.from_pretrained(
     'checkpoints/',
     checkpoint_file='checkpoint_best.pt',
     data_name_or_path='/home/ubuntu/projects/datasets/cnn_dm-bin'
