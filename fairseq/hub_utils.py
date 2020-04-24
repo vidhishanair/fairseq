@@ -61,6 +61,7 @@ def from_pretrained(
         'bpecodes': 'bpe_codes',
         'sentencepiece.bpe.model': 'sentencepiece_vocab',
     }.items():
+        print(model_path, file)
         path = os.path.join(model_path, file)
         if os.path.exists(path):
             kwargs[arg] = path
