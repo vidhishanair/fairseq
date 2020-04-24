@@ -1,10 +1,12 @@
 import torch
 # from fairseq.models.bart import BARTModel
 from fairseq.models.bart import StructSumBARTModel
+
+dirname = 'saved_models/latent_str_mtokens800/'
 bart = StructSumBARTModel.from_pretrained(
-    'checkpoints/',
+    dirname,
     checkpoint_file='checkpoint_best.pt',
-    data_name_or_path='/home/ubuntu/projects/datasets/cnn_dm-bin'
+    data_name_or_path='/home/ubuntu/projects/datasets/cnn_dm_sentids-bin'
 )
 
 bart.cuda()
@@ -12,9 +14,9 @@ bart.eval()
 bart.half()
 count = 1
 bsz = 32
-with open('/home/ubuntu/projects/datasets/cnn_dm/test.source') as source,\
-        open('/home/ubuntu/projects/datasets/cnn_dm/test.source-target.source.sentids') as source_sentids,\
-        open('checkpoints/test.hypo', 'w') as fout:
+with open('/home/ubuntu/projects/datasets/cnn_dm_sentids/test.source') as source,\
+        open('/home/ubuntu/projects/datasets/cnn_dm_sentids/test.source-target.source.sentids') as source_sentids,\
+        open(dirname+'/test.hypo', 'w') as fout:
     sline = source.readline().strip()
     sids = source_sentids.readline().strip()
     slines = [sline]
