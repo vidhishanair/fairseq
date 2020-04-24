@@ -2,9 +2,9 @@ import torch
 # from fairseq.models.bart import BARTModel
 from fairseq.models.bart import StructSumBARTModel
 bart = StructSumBARTModel.from_pretrained(
-    'checkpoints/',
+    'saved_models/latent_str_mtokens800/',
     checkpoint_file='checkpoint_best.pt',
-    data_name_or_path='/home/ubuntu/projects/datasets/cnn_dm-bin'
+    data_name_or_path='/home/ubuntu/projects/datasets/cnn_dm_sentids-bin/'
 )
 
 bart.cuda()

@@ -244,7 +244,7 @@ class StructSumBARTClassificationHead(nn.Module):
 
 @register_model_architecture('structsum_bart', 'structsum_bart_large')
 def structsum_bart_large_architecture(args):
-    args.use_structured_attention = getattr(args, 'use_structured_attention', True)
+    #args.use_structured_attention = getattr(args, 'use_structured_attention', True)
     args.encoder_embed_path = getattr(args, 'encoder_embed_path', None)
     args.encoder_embed_dim = getattr(args, 'encoder_embed_dim', 1024)
     args.encoder_ffn_embed_dim = getattr(args, 'encoder_ffn_embed_dim', 4*1024)

@@ -163,6 +163,9 @@ class StructSumTransformerModel(FairseqEncoderDecoderModel):
                             help='add layernorm to embedding')
         parser.add_argument('--no-scale-embedding', action='store_true',
                             help='if True, dont scale embeddings')
+        parser.add_argument('--use_structured_attention', action='store_true',
+                            help='if True, add structured attention module', default=True)
+        #args.use_structured_attention = getattr(args, 'use_structured_attention', True)
         # fmt: on
 
     @classmethod
@@ -413,10 +416,10 @@ class TransformerEncoder(FairseqEncoder):
             self.layernorm_embedding = None
 
         if args.use_structured_attention:
-            self.structure_att = StructuredAttention(sent_hiddent_size=self.args.encoder_embed_dim,
+            self.structure_att = StructuredAttention(sent_hiddent_size=args.encoder_embed_dim,
                                                      bidirectional=False,
                                                      py_version='nightly')
-            self.str_to_enc_linear = nn.Linear(self.args.encoder_embed_dim//2+self.args.encoder_embed_dim, self.args.encoder_embed_dim)
+            self.str_to_enc_linear = nn.Linear(args.encoder_embed_dim//2+args.encoder_embed_dim, args.encoder_embed_dim)
         else:
             self.structure_att = None
             self.str_to_enc_linear = None
