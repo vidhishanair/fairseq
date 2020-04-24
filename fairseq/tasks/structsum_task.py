@@ -354,8 +354,19 @@ class StructSumTask(FairseqTask):
             truncate_source=self.args.truncate_source,
         )
 
-    def build_dataset_for_inference(self, src_tokens, src_lengths):
-        return LanguagePairDataset(src_tokens, src_lengths, self.source_dictionary)
+    def build_dataset_for_inference(self, src_tokens, src_lengths, src_sent_ids):
+        sentids = []
+        for sid in sentids:
+            data = src_sent_ids[sid]
+            no_words = len(data)
+            no_sents = data[-1]+1
+            data = torch.LongTensor(data)
+            one_hot_data = np.zeros((no_sents, no_words))
+            for id in range(no_sents):
+                one_hot_data[id, data.eq(id)] = 1
+            data = torch.from_numpy(one_hot_data)
+            sentids.append(data)
+        return StructSumDataset(src_tokens, src_lengths, self.source_dictionary, src_sent_ids=sentids)
 
     def build_model(self, args):
         model = super().build_model(args)
