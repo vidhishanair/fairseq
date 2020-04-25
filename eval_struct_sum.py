@@ -1,3 +1,4 @@
+import files2rouge
 import torch
 # from fairseq.models.bart import BARTModel
 from fairseq.models.bart import StructSumBARTModel
@@ -43,3 +44,7 @@ with open('/home/ubuntu/projects/datasets/cnn_dm_sentids/test.source') as source
         for hypothesis in hypotheses_batch:
             fout.write(hypothesis + '\n')
             fout.flush()
+hyp_path = dirname+"/test.hypo"
+ref_path = '/home/ubuntu/projects/datasets/cnn_dm_sentids/test.target'
+results = files2rouge.run(hyp_path, ref_path)
+print(results)
