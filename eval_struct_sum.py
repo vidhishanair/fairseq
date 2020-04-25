@@ -2,7 +2,7 @@ import torch
 # from fairseq.models.bart import BARTModel
 from fairseq.models.bart import StructSumBARTModel
 
-dirname = 'saved_models/latent_str_mtokens800/'
+dirname = 'saved_models/latent_str_mtokens800_lr1e-5/'
 bart = StructSumBARTModel.from_pretrained(
     dirname,
     checkpoint_file='checkpoint_best.pt',
@@ -23,6 +23,8 @@ with open('/home/ubuntu/projects/datasets/cnn_dm_sentids/test.source') as source
     sentids = [sids]
     for sline in source:
         sids = source_sentids.readline().strip()
+        if count % 1000 == 0:
+            print("Processed "+str(count)+" examples")
         if count % bsz == 0:
             with torch.no_grad():
                 hypotheses_batch = bart.sample(slines, src_sent_ids=sentids, beam=4, lenpen=2.0, max_len_b=140, min_len=55, no_repeat_ngram_size=3)

@@ -356,10 +356,11 @@ class StructSumTask(FairseqTask):
 
     def build_dataset_for_inference(self, src_tokens, src_lengths, src_sent_ids):
         sentids = []
-        for sid in sentids:
-            data = src_sent_ids[sid]
+        for sid in src_sent_ids:
+            data = sid.split(" ")
+            data = list(map(int, data))
             no_words = len(data)
-            no_sents = data[-1]+1
+            no_sents = data[-1]
             data = torch.LongTensor(data)
             one_hot_data = np.zeros((no_sents, no_words))
             for id in range(no_sents):
