@@ -91,11 +91,17 @@ class BARTHubInterface(nn.Module):
 
     def _build_sample(self, src_tokens: List[torch.LongTensor], src_sent_ids=None):
         # assert torch.is_tensor(src_tokens)
-        dataset = self.task.build_dataset_for_inference(
-            src_tokens,
-            [x.numel() for x in src_tokens],
-            src_sent_ids=src_sent_ids
-        )
+        if src_sent_ids is not None:
+            dataset = self.task.build_dataset_for_inference(
+                src_tokens,
+                [x.numel() for x in src_tokens],
+                src_sent_ids=src_sent_ids
+            )
+        else:
+            dataset = self.task.build_dataset_for_inference(
+                src_tokens,
+                [x.numel() for x in src_tokens],
+            )
         sample = dataset.collater(dataset)
         sample = utils.apply_to_sample(
             lambda tensor: tensor.to(self.device),

@@ -251,7 +251,7 @@ class TranslationTask(FairseqTask):
             upsample_primary=self.args.upsample_primary,
             left_pad_source=self.args.left_pad_source,
             left_pad_target=self.args.left_pad_target,
-            max_source_positions=self.args.max_source_positions,
+            max_source_positions=self.args.max_tokens,
             max_target_positions=self.args.max_target_positions,
             load_alignments=self.args.load_alignments,
             truncate_source=self.args.truncate_source,

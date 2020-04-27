@@ -1,10 +1,10 @@
 import torch
-# from fairseq.models.bart import BARTModel
-from fairseq.models.bart import StructSumBARTModel
-bart = StructSumBARTModel.from_pretrained(
-    'checkpoints/',
+from fairseq.models.bart import BARTModel
+#from fairseq.models.bart import StructSumBARTModel
+bart = BARTModel.from_pretrained(
+    'saved_models/bart_mtokens800/',
     checkpoint_file='checkpoint_best.pt',
-    data_name_or_path='/home/ubuntu/projects/datasets/cnn_dm/'
+    data_name_or_path='/home/ubuntu/projects/datasets/cnn_dm-bin/'
 )
 
 bart.cuda()
@@ -12,7 +12,7 @@ bart.eval()
 bart.half()
 count = 1
 bsz = 32
-with open('/home/ubuntu/projects/datasets/cnn_dm/test.source') as source, open('checkpoints/test.hypo', 'w') as fout:
+with open('/home/ubuntu/projects/datasets/cnn_dm/test.source') as source, open('saved_models/bart_mtokens800/test.hypo', 'w') as fout:
     sline = source.readline().strip()
     slines = [sline]
     for sline in source:
