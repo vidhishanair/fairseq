@@ -402,6 +402,9 @@ class TransformerEncoder(FairseqEncoder):
             if not args.no_token_positional_embeddings
             else None
         )
+        # if self.freeze_bart:
+        #     self.embed_positions.weight.requires_grad = False
+        #     self.embed_positions.bias.requires_grad = False
 
         self.layer_wise_attention = getattr(args, "layer_wise_attention", False)
 
@@ -409,6 +412,11 @@ class TransformerEncoder(FairseqEncoder):
         self.layers.extend(
             [self.build_encoder_layer(args) for i in range(args.encoder_layers)]
         )
+        # if self.freeze_bart:
+        #     for layer in self.layers:
+        #         for param in layer.parameters():
+        #             self.embed_positions.weight.requires_grad = False
+
         self.num_layers = len(self.layers)
 
         if args.encoder_normalize_before:

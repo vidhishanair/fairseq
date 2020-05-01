@@ -91,10 +91,12 @@ class BaseFairseqModel(nn.Module):
         self.upgrade_state_dict(state_dict)
         new_state_dict = prune_state_dict(state_dict, args)
         changed_state_dict = new_state_dict.copy()
-        for key, value in new_state_dict.items():
-            if key in ['structure_att.tp_linear.weight', 'structure_att.tp_linear.bias', 'structure_att.tc_linear.weight', 'structure_att.tc_linear.bias', 'structure_att.fi_linear.weight', 'structure_att.bilinear._weight_matrix', 'structure_att.bilinear._bias', 'structure_att.fzlinear.weight', 'structure_att.fzlinear.bias', 'str_to_enc_linear.weight', 'str_to_enc_linear.bias', 'structure_att.exparam']:
-                changed_state_dict['encoder.'+key] = new_state_dict[key]
-                del changed_state_dict[key]
+
+        # for key, value in new_state_dict.items():
+        #     if key in ['structure_att.tp_linear.weight', 'structure_att.tp_linear.bias', 'structure_att.tc_linear.weight', 'structure_att.tc_linear.bias', 'structure_att.fi_linear.weight', 'structure_att.bilinear._weight_matrix', 'structure_att.bilinear._bias', 'structure_att.fzlinear.weight', 'structure_att.fzlinear.bias', 'str_to_enc_linear.weight', 'str_to_enc_linear.bias', 'structure_att.exparam']:
+        #         changed_state_dict['encoder.'+key] = new_state_dict[key]
+        #         del changed_state_dict[key]
+
         #print(new_state_dict)
         #print(new_state_dict.keys())
         #exit()
