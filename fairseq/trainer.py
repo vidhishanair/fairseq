@@ -127,6 +127,7 @@ class Trainer(object):
         return self._lr_scheduler
 
     def _build_optimizer(self):
+
         for name, param in self.model.named_parameters():
             if name.startswith('encoder') and name not in ["encoder.structure_att.exparam",
                                                        "encoder.structure_att.tp_linear.weight",
@@ -141,11 +142,7 @@ class Trainer(object):
                                                        "encoder.str_to_enc_linear.weight",
                                                        "encoder.str_to_enc_linear.bias"]:
                 param.requires_grad = False
-
-        for name, param in self.model.named_parameters():
-            if param.requires_grad == False:
-                print(name)
-        exit()
+        print("Freezing parameters")
         params = list(
             filter(
                 lambda p: p.requires_grad,
