@@ -77,6 +77,7 @@ class StructuredAttention(nn.Module):
         #No batch inverse
         #LLinv = torch.stack([torch.inverse(li) for li in L_ij_bar])
         #print(f_ij)
+        #print(f_i)
         #print(L_ij_bar)
         #print(np.linalg.det(L_ij_bar.data.cpu().numpy()))
         #exit()
@@ -104,6 +105,7 @@ class StructuredAttention(nn.Module):
 
         dx = mask1 * tmp1 - mask2 * tmp2
 
+        #print(dx)
         d = torch.cat([d0.unsqueeze(1), dx], dim = 1)
         df = d.transpose(1,2)
 

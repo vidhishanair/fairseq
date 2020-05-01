@@ -3,6 +3,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import random
 import math
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -99,6 +100,8 @@ class StructSumTransformerModel(FairseqEncoderDecoderModel):
                             help='activation function to use')
         parser.add_argument('--dropout', type=float, metavar='D',
                             help='dropout probability')
+        parser.add_argument('--dropout_structured_attention', type=float, metavar='D',
+                            help='dropout probability for structured_attention')
         parser.add_argument('--attention-dropout', type=float, metavar='D',
                             help='dropout probability for attention weights')
         parser.add_argument('--activation-dropout', '--relu-dropout', type=float, metavar='D',
@@ -377,6 +380,8 @@ class TransformerEncoder(FairseqEncoder):
         self.register_buffer("version", torch.Tensor([3]))
 
         self.dropout = args.dropout
+        self.dropout_structured_attention = getattr(args, "dropout_structured_attention", False)
+        #getattr(args, "layernorm_embedding", False)
         self.encoder_layerdrop = args.encoder_layerdrop
 
         embed_dim = embed_tokens.embedding_dim
@@ -501,6 +506,9 @@ class TransformerEncoder(FairseqEncoder):
             sent_level_encoder_out = torch.bmm(src_sent_mask.float(), enc_out)
             sent_str_att_out, sent_str_att = self.structure_att(sent_level_encoder_out)
             sent_str_att_out = torch.bmm(src_sent_mask.permute(0,2,1).float(), sent_str_att_out)
+            if self.training and self.dropout_structured_attention > 0 and random.random() > self.dropout_structured_attention:
+                sent_str_att_out = sent_str_att_out * torch.zeros_like(sent_str_att_out)
+                #print(sent_str_att_out)
             #print(enc_out.size(), sent_str_att_out.size())
             str_att_enc_out = self.str_to_enc_linear(torch.cat([enc_out, sent_str_att_out], dim=2))
             x = str_att_enc_out.permute(1,0,2)

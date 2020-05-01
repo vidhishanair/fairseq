@@ -127,7 +127,7 @@ def load_checkpoint(args, trainer, **passthrough_args):
         checkpoint_path = os.path.join(args.save_dir, "checkpoint_last{}.pt".format(suffix))
     else:
         checkpoint_path = args.restore_file
-
+    print("Restoring: "+str(checkpoint_path))
     extra_state = trainer.load_checkpoint(
         checkpoint_path,
         args.reset_optimizer,
