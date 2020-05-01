@@ -128,7 +128,7 @@ class Trainer(object):
 
     def _build_optimizer(self):
         for name, param in self.model.named_parameters():
-            if name.startswith('encoder') and name in ["encoder.structure_att.exparam",
+            if name.startswith('encoder') and name not in ["encoder.structure_att.exparam",
                                                        "encoder.structure_att.tp_linear.weight",
                                                        "encoder.structure_att.tp_linear.bias",
                                                        "encoder.structure_att.tc_linear.weight",
