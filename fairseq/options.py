@@ -236,6 +236,7 @@ def get_parser(desc, default_task="translation"):
                         help='total number of GPUs to parallelize model over')
     parser.add_argument('--checkpoint-suffix', default='',
                         help='Suffix to add to the checkpoint file name')
+    parser.add_argument('--freeze_bart', action='store_true', default=False, help='freeze bart params')
 
     from fairseq.registry import REGISTRIES
     for registry_name, REGISTRY in REGISTRIES.items():

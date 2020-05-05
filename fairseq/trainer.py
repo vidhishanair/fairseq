@@ -48,6 +48,7 @@ class Trainer(object):
         # copy model and criterion to current device
         self._criterion = criterion
         self._model = model
+        self.freeze_bart = args.freeze_bart
         if args.fp16:
             self._criterion = self._criterion.half()
             self._model = self._model.half()
@@ -127,22 +128,22 @@ class Trainer(object):
         return self._lr_scheduler
 
     def _build_optimizer(self):
-
-        for name, param in self.model.named_parameters():
-            if name.startswith('encoder') and name not in ["encoder.structure_att.exparam",
-                                                       "encoder.structure_att.tp_linear.weight",
-                                                       "encoder.structure_att.tp_linear.bias",
-                                                       "encoder.structure_att.tc_linear.weight",
-                                                       "encoder.structure_att.tc_linear.bias",
-                                                       "encoder.structure_att.fi_linear.weight",
-                                                       "encoder.structure_att.bilinear._weight_matrix",
-                                                       "encoder.structure_att.bilinear._bias",
-                                                       "encoder.structure_att.fzlinear.weight",
-                                                       "encoder.structure_att.fzlinear.bias",
-                                                       "encoder.str_to_enc_linear.weight",
-                                                       "encoder.str_to_enc_linear.bias"]:
-                param.requires_grad = False
-        print("Freezing parameters")
+        if self.freeze_bart:
+            for name, param in self.model.named_parameters():
+                if name.startswith('encoder') and name not in ["encoder.structure_att.exparam",
+                                                           "encoder.structure_att.tp_linear.weight",
+                                                           "encoder.structure_att.tp_linear.bias",
+                                                           "encoder.structure_att.tc_linear.weight",
+                                                           "encoder.structure_att.tc_linear.bias",
+                                                           "encoder.structure_att.fi_linear.weight",
+                                                           "encoder.structure_att.bilinear._weight_matrix",
+                                                           "encoder.structure_att.bilinear._bias",
+                                                           "encoder.structure_att.fzlinear.weight",
+                                                           "encoder.structure_att.fzlinear.bias",
+                                                           "encoder.str_to_enc_linear.weight",
+                                                           "encoder.str_to_enc_linear.bias"]:
+                    param.requires_grad = False
+            print("Freezing parameters")
         params = list(
             filter(
                 lambda p: p.requires_grad,
