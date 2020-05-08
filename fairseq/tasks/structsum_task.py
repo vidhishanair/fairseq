@@ -296,7 +296,7 @@ def load_langpair_dataset(
         left_pad_target=left_pad_target,
         max_source_positions=max_source_positions,
         max_target_positions=max_target_positions,
-        align_dataset=align_dataset, eos=eos, src_sent_ids=sent_id_dataset, split=split, chains=chains_dataset)
+        align_dataset=align_dataset, eos=eos, src_sent_ids=sent_id_dataset, split=split, chains_dataset=chains_dataset)
 
 
 @register_task('structsum')
