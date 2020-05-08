@@ -71,7 +71,7 @@ class StructSumBARTModel(StructSumTransformerModel):
 
     def forward(
             self, src_tokens, src_lengths, prev_output_tokens,
-            features_only=False, classification_head_name=None, src_sent_mask=None, **kwargs
+            features_only=False, classification_head_name=None, src_sent_mask=None, es_adj_mat=None, **kwargs
     ):
         if classification_head_name is not None:
             features_only = True
@@ -80,6 +80,7 @@ class StructSumBARTModel(StructSumTransformerModel):
             src_tokens,
             src_lengths=src_lengths,
             src_sent_mask=src_sent_mask,
+            es_adj_mat=es_adj_mat,
             **kwargs,
         )
         # #print('src_tokens: '+str(src_tokens.size()))

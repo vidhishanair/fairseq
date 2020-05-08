@@ -101,6 +101,72 @@ class SentIdsRawDataset(FairseqDataset):
     def exists(path):
         return os.path.exists(path)
 
+class ChainsDataset(FairseqDataset):
+    """Takes a text file as input and binarizes it in memory at instantiation.
+    Original lines are also kept in memory"""
+
+    def __init__(self, path):
+        print(path)
+        self.chains_data = []
+        # self.sizes = []
+        self.read_data(path)
+        # self.size = len(self.sentids)
+
+    def read_data(self, path):
+        with open(path, 'r', encoding='utf-8') as f:
+            for line in f:
+                pruned_data = {'coref':[], 'ner':[]}
+                data = json.loads(line.strip('\n'))
+                pruned_data['no_sents'] = data['no_sents']
+                if 'coref' in data:
+                    pruned_data['coref'] = data['coref']
+                if 'ner' in data:
+                    pruned_data['ner'] = data['ner']
+                self.chains_data.append(pruned_data)
+                # self.sizes.append(no_words)
+        # self.sizes = np.array(self.sizes)
+
+    def check_index(self, i):
+        if i < 0 or i >= self.size:
+            raise IndexError('index out of range')
+
+    @lru_cache(maxsize=8)
+    def __getitem__(self, i):
+        self.check_index(i)
+        data = self.chains_data[i]
+        no_sents = data['no_sents']
+        one_hot_data = np.zeros((no_sents, no_sents))
+        for link in data['coref']:
+            parent = link['head_id']
+            child = link['tail_id']
+            if parent >= no_sents or child >= no_sents:
+                continue
+            #print(parent, child)
+            one_hot_data[parent][child] += 1
+            one_hot_data[child][parent] += 1
+        data = torch.from_numpy(one_hot_data)
+        return data
+
+    # def get_original_text(self, i):
+    #     self.check_index(i)
+    #     return self.lines[i]
+
+    def __del__(self):
+        pass
+
+    def __len__(self):
+        return self.size
+
+    # def num_tokens(self, index):
+    #     return self.sizes[index]
+
+    # def size(self, index):
+    #     return self.sizes[index]
+
+    @staticmethod
+    def exists(path):
+        return os.path.exists(path)
+
 
 def load_langpair_dataset(
         data_path, split,
@@ -109,8 +175,7 @@ def load_langpair_dataset(
         combine, dataset_impl, upsample_primary,
         left_pad_source, left_pad_target, max_source_positions,
         max_target_positions, prepend_bos=False, load_alignments=False,
-        truncate_source=False, append_source_id=False
-):
+        truncate_source=False, append_source_id=False, explicit_str_att=False):
 
     def split_exists(split, src, tgt, lang, data_path):
         filename = os.path.join(data_path, '{}.{}-{}.{}'.format(split, src, tgt, lang))
@@ -119,6 +184,7 @@ def load_langpair_dataset(
     src_datasets = []
     tgt_datasets = []
     sent_id_datasets = []
+    chains_datasets = []
 
     for k in itertools.count():
         split_k = split + (str(k) if k > 0 else '')
@@ -167,6 +233,10 @@ def load_langpair_dataset(
             )
         sent_id_datasets.append(sent_id_dataset)
 
+        if explicit_str_att:
+            chains_dataset = ChainsDataset(prefix + 'source.chains')
+            chains_datasets.append(chains_dataset)
+
         tgt_dataset = data_utils.load_indexed_dataset(prefix + tgt, tgt_dict, dataset_impl)
         if tgt_dataset is not None:
             tgt_datasets.append(tgt_dataset)
@@ -183,6 +253,9 @@ def load_langpair_dataset(
     if len(src_datasets) == 1:
         src_dataset = src_datasets[0]
         sent_id_dataset = sent_id_datasets[0]
+        chains_dataset = chains_datasets
+        if explicit_str_att:
+            chains_dataset = chains_datasets[0]
         tgt_dataset = tgt_datasets[0] if len(tgt_datasets) > 0 else None
     else:
         sample_ratios = [1] * len(src_datasets)
@@ -209,9 +282,9 @@ def load_langpair_dataset(
         eos = tgt_dict.index('[{}]'.format(tgt))
 
     align_dataset = None
-    if load_alignments:
-        align_path = os.path.join(data_path, '{}.align.{}-{}'.format(split, src, tgt))
-        chains = torch.load(load_alignments)
+    # if load_alignments:
+    #     align_path = os.path.join(data_path, '{}.align.{}-{}'.format(split, src, tgt))
+    #     chains = torch.load(load_alignments)
         # if indexed_dataset.dataset_exists(align_path, impl=dataset_impl):
         #     align_dataset = data_utils.load_indexed_dataset(align_path, None, dataset_impl)
 
@@ -223,8 +296,7 @@ def load_langpair_dataset(
         left_pad_target=left_pad_target,
         max_source_positions=max_source_positions,
         max_target_positions=max_target_positions,
-        align_dataset=align_dataset, eos=eos, src_sent_ids=sent_id_dataset, split=split
-    )
+        align_dataset=align_dataset, eos=eos, src_sent_ids=sent_id_dataset, split=split, chains=chains_dataset)
 
 
 @register_task('structsum')

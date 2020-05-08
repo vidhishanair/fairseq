@@ -457,6 +457,7 @@ class TransformerEncoder(FairseqEncoder):
             cls_input: Optional[Tensor] = None,
             return_all_hiddens: bool = False,
             src_sent_mask: Optional[Tensor] = None,
+            es_adj_mat: Optional[Tensor] = None,
     ):
         """
         Args:
@@ -479,6 +480,8 @@ class TransformerEncoder(FairseqEncoder):
                   hidden states of shape `(src_len, batch, embed_dim)`.
                   Only populated if *return_all_hiddens* is True.
         """
+        print(es_adj_mat)
+        exit()
         if self.layer_wise_attention:
             return_all_hiddens = True
 
