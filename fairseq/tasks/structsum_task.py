@@ -333,6 +333,8 @@ class StructSumTask(FairseqTask):
                             help='target language')
         parser.add_argument('--load-alignments', action='store_true',
                             help='load the binarized alignments')
+        parser.add_argument('--explicit_str_att', action='store_true',
+                            help='load the coref/ner links')
         parser.add_argument('--left-pad-source', default='True', type=str, metavar='BOOL',
                             help='pad the source on the left')
         parser.add_argument('--left-pad-target', default='False', type=str, metavar='BOOL',
@@ -424,6 +426,7 @@ class StructSumTask(FairseqTask):
             max_target_positions=self.args.max_target_positions,
             load_alignments=self.args.load_alignments,
             truncate_source=self.args.truncate_source,
+            explicit_str_att=self.args.explicit_str_att
         )
 
     def build_dataset_for_inference(self, src_tokens, src_lengths, src_sent_ids):
