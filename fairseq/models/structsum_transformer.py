@@ -442,7 +442,13 @@ class TransformerEncoder(FairseqEncoder):
         else:
             self.structure_att = None
         if self.explicit_str_att:
+            self.tp_linear = nn.Linear(args.encoder_embed_dim, args.encoder_embed_dim//2, bias=True)
+            self.fzlinear = nn.Linear(args.encoder_embed_dim//2, args.encoder_embed_dim//2, bias=True)
             str_out_size += args.encoder_embed_dim//2
+        else:
+            self.tp_linear = None
+            self.fzlinear = None
+
         if self.use_structured_attention or self.explicit_str_att:
             self.str_to_enc_linear = nn.Linear(str_out_size+args.encoder_embed_dim, args.encoder_embed_dim)
         else:
