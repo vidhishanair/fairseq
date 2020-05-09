@@ -428,13 +428,24 @@ class TransformerEncoder(FairseqEncoder):
         else:
             self.layernorm_embedding = None
 
+        self.use_structured_attention = args.use_structured_attention
+        self.explicit_str_att = args.explicit_str_att
+        if not self.use_structured_attention and not self.explicit_str_att:
+            print("One of --use_structured_attention or --explicit_str_att must be set")
+            exit()
+        str_out_size = 0
         if args.use_structured_attention:
             self.structure_att = StructuredAttention(sent_hiddent_size=args.encoder_embed_dim,
                                                      bidirectional=False,
                                                      py_version='nightly')
-            self.str_to_enc_linear = nn.Linear(args.encoder_embed_dim//2+args.encoder_embed_dim, args.encoder_embed_dim)
+            str_out_size += args.encoder_embed_dim//2
         else:
             self.structure_att = None
+        if self.explicit_str_att:
+            str_out_size += args.encoder_embed_dim//2
+        if self.use_structured_attention or self.explicit_str_att:
+            self.str_to_enc_linear = nn.Linear(str_out_size+args.encoder_embed_dim, args.encoder_embed_dim)
+        else:
             self.str_to_enc_linear = None
 
     def build_encoder_layer(self, args):
@@ -480,8 +491,6 @@ class TransformerEncoder(FairseqEncoder):
                   hidden states of shape `(src_len, batch, embed_dim)`.
                   Only populated if *return_all_hiddens* is True.
         """
-        print(es_adj_mat)
-        exit()
         if self.layer_wise_attention:
             return_all_hiddens = True
 
@@ -510,19 +519,30 @@ class TransformerEncoder(FairseqEncoder):
             if return_all_hiddens:
                 encoder_states[-1] = x
 
-        #print('src_tokens: '+str(src_tokens.size()))
-        #print(src_sent_mask.size(), encoder_out.encoder_out.size())
-        if src_sent_mask is not None:
-            enc_out = x.permute(1,0,2)
+        enc_out = x.permute(1,0,2)
+        str_outs = [enc_out]
+        if self.use_structured_attention:
+            print("inside LS")
             sent_level_encoder_out = torch.bmm(src_sent_mask.float(), enc_out)
             sent_str_att_out, sent_str_att = self.structure_att(sent_level_encoder_out)
             sent_str_att_out = torch.bmm(src_sent_mask.permute(0,2,1).float(), sent_str_att_out)
             if self.training and self.dropout_structured_attention > 0 and random.random() > self.dropout_structured_attention:
                 sent_str_att_out = sent_str_att_out * torch.zeros_like(sent_str_att_out)
-                #print(sent_str_att_out)
-            #print(enc_out.size(), sent_str_att_out.size())
-            str_att_enc_out = self.str_to_enc_linear(torch.cat([enc_out, sent_str_att_out], dim=2))
-            x = str_att_enc_out.permute(1,0,2)
+            str_outs.append(sent_str_att_out)
+
+        if self.explicit_str_att:
+            print("inside ES")
+            adj_mat = es_adj_mat + 0.005
+            row_sums = torch.sum(adj_mat, dim=2, keepdim=True)
+            adj_mat = adj_mat/row_sums.expand_as(adj_mat)
+            tp = F.tanh(self.tp_linear(enc_out)) # b*s, token, h1
+            attended_hidden = torch.bmm(adj_mat, tp)
+            es_str_att_out = F.relu(self.fzlinear(attended_hidden))
+            str_outs.append(es_str_att_out)
+            print(es_str_att_out.size())
+
+        str_att_enc_out = self.str_to_enc_linear(torch.cat(str_outs, dim=2))
+        x = str_att_enc_out.permute(1,0,2)
             #encoder_out.encoder_out = str_att_enc_out
 
         return EncoderOut(
