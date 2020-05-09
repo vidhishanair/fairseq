@@ -167,7 +167,7 @@ class StructSumTransformerModel(FairseqEncoderDecoderModel):
         parser.add_argument('--no-scale-embedding', action='store_true',
                             help='if True, dont scale embeddings')
         parser.add_argument('--use_structured_attention', action='store_true',
-                            help='if True, add structured attention module', default=True)
+                            help='if True, add structured attention module', default=False)
         #args.use_structured_attention = getattr(args, 'use_structured_attention', True)
         # fmt: on
 
@@ -435,6 +435,7 @@ class TransformerEncoder(FairseqEncoder):
             exit()
         str_out_size = 0
         if args.use_structured_attention:
+            print("Using Latent Structured Attention")
             self.structure_att = StructuredAttention(sent_hiddent_size=args.encoder_embed_dim,
                                                      bidirectional=False,
                                                      py_version='nightly')
@@ -442,6 +443,7 @@ class TransformerEncoder(FairseqEncoder):
         else:
             self.structure_att = None
         if self.explicit_str_att:
+            print("Using Explicit Structured Attention")
             self.tp_linear = nn.Linear(args.encoder_embed_dim, args.encoder_embed_dim//2, bias=True)
             self.fzlinear = nn.Linear(args.encoder_embed_dim//2, args.encoder_embed_dim//2, bias=True)
             str_out_size += args.encoder_embed_dim//2
@@ -527,9 +529,8 @@ class TransformerEncoder(FairseqEncoder):
 
         enc_out = x.permute(1,0,2)
         str_outs = [enc_out]
+        sent_level_encoder_out = torch.bmm(src_sent_mask.float(), enc_out)
         if self.use_structured_attention:
-            print("inside LS")
-            sent_level_encoder_out = torch.bmm(src_sent_mask.float(), enc_out)
             sent_str_att_out, sent_str_att = self.structure_att(sent_level_encoder_out)
             sent_str_att_out = torch.bmm(src_sent_mask.permute(0,2,1).float(), sent_str_att_out)
             if self.training and self.dropout_structured_attention > 0 and random.random() > self.dropout_structured_attention:
@@ -537,15 +538,14 @@ class TransformerEncoder(FairseqEncoder):
             str_outs.append(sent_str_att_out)
 
         if self.explicit_str_att:
-            print("inside ES")
             adj_mat = es_adj_mat + 0.005
             row_sums = torch.sum(adj_mat, dim=2, keepdim=True)
             adj_mat = adj_mat/row_sums.expand_as(adj_mat)
-            tp = F.tanh(self.tp_linear(enc_out)) # b*s, token, h1
+            tp = F.tanh(self.tp_linear(sent_level_encoder_out)) # b*s, token, h1
             attended_hidden = torch.bmm(adj_mat, tp)
             es_str_att_out = F.relu(self.fzlinear(attended_hidden))
+            es_str_att_out = torch.bmm(src_sent_mask.permute(0,2,1).float(), es_str_att_out)
             str_outs.append(es_str_att_out)
-            print(es_str_att_out.size())
 
         str_att_enc_out = self.str_to_enc_linear(torch.cat(str_outs, dim=2))
         x = str_att_enc_out.permute(1,0,2)

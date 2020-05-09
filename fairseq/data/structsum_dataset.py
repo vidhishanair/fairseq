@@ -60,7 +60,7 @@ def collate(
         truncated_sent_lens = [s[src_key].size(0) for s in samples]
         values = [s[key][:truncated_sent_lens[idx]][:truncated_sent_lens[idx]] for idx, s in enumerate(samples)]
         max_src_sents = max(v.size(0) for v in values)
-        res = torch.zeros((len(values), max_src_sents, max_src_sents), dtype=torch.double).fill_(pad_idx)
+        res = torch.zeros((len(values), max_src_sents, max_src_sents), dtype=torch.float32).fill_(pad_idx)
 
         def copy_tensor(src, dst):
             assert dst.numel() == src.numel()
