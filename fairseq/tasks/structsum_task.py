@@ -108,11 +108,12 @@ class ChainsDataset(FairseqDataset):
     def __init__(self, path):
         print(path)
         self.chains_data = []
-        # self.sizes = []
+        self.sizes = []
         self.read_data(path)
-        # self.size = len(self.sentids)
+        self.size = len(self.chains_data)
 
     def read_data(self, path):
+        print(path)
         with open(path, 'r', encoding='utf-8') as f:
             for line in f:
                 pruned_data = {'coref':[], 'ner':[]}
@@ -123,8 +124,8 @@ class ChainsDataset(FairseqDataset):
                 if 'ner' in data:
                     pruned_data['ner'] = data['ner']
                 self.chains_data.append(pruned_data)
-                # self.sizes.append(no_words)
-        # self.sizes = np.array(self.sizes)
+                self.sizes.append(pruned_data['no_sents'])
+        self.sizes = np.array(self.sizes)
 
     def check_index(self, i):
         if i < 0 or i >= self.size:
@@ -157,11 +158,11 @@ class ChainsDataset(FairseqDataset):
     def __len__(self):
         return self.size
 
-    # def num_tokens(self, index):
-    #     return self.sizes[index]
+    def num_tokens(self, index):
+        return self.sizes[index]
 
-    # def size(self, index):
-    #     return self.sizes[index]
+    def size(self, index):
+        return self.sizes[index]
 
     @staticmethod
     def exists(path):
@@ -296,7 +297,8 @@ def load_langpair_dataset(
         left_pad_target=left_pad_target,
         max_source_positions=max_source_positions,
         max_target_positions=max_target_positions,
-        align_dataset=align_dataset, eos=eos, src_sent_ids=sent_id_dataset, split=split, chains_dataset=chains_dataset)
+        align_dataset=align_dataset, eos=eos, src_sent_ids=sent_id_dataset, 
+        split=split, chains_dataset=chains_dataset, explicit_str_att=explicit_str_att)
 
 
 @register_task('structsum')

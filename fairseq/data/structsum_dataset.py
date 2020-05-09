@@ -127,9 +127,10 @@ def collate(
         'target': target,
     }
     if explicit_str_att:
-        es_adj_mat = collate_es_adj_mat('es_adj_mat')
+        es_adj_mat = collate_es_adj_mat('es_adj_mat', 'source_sent_ids')
         es_adj_mat = es_adj_mat.index_select(0, sort_order)
-        batch['es_adj_mat'] = es_adj_mat
+        batch['net_input']['es_adj_mat'] = es_adj_mat
+    
     if prev_output_tokens is not None:
         batch['net_input']['prev_output_tokens'] = prev_output_tokens
 
