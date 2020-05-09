@@ -168,6 +168,8 @@ class StructSumTransformerModel(FairseqEncoderDecoderModel):
                             help='if True, dont scale embeddings')
         parser.add_argument('--use_structured_attention', action='store_true',
                             help='if True, add structured attention module', default=False)
+        parser.add_argument('--detact_bart_encoder', action='store_true',
+                            help='if True, detach encoder from structsum module', default=False)
         #args.use_structured_attention = getattr(args, 'use_structured_attention', True)
         # fmt: on
 
@@ -430,6 +432,7 @@ class TransformerEncoder(FairseqEncoder):
 
         self.use_structured_attention = args.use_structured_attention
         self.explicit_str_att = args.explicit_str_att
+        self.detach_bart_encoder = args.detach_bart_encoder
         if not self.use_structured_attention and not self.explicit_str_att:
             print("One of --use_structured_attention or --explicit_str_att must be set")
             exit()
@@ -527,14 +530,19 @@ class TransformerEncoder(FairseqEncoder):
             if return_all_hiddens:
                 encoder_states[-1] = x
 
-        enc_out = x.permute(1,0,2)
-        str_outs = [enc_out]
+        perm_enc_out = x.permute(1,0,2)
+        str_outs = [perm_enc_out]
+        if self.detach_bart_encoder:
+            enc_out = perm_enc_out.clone().detach()
+        else:
+            enc_out = perm_enc_out
+
         sent_level_encoder_out = torch.bmm(src_sent_mask.float(), enc_out)
         if self.use_structured_attention:
             sent_str_att_out, sent_str_att = self.structure_att(sent_level_encoder_out)
             sent_str_att_out = torch.bmm(src_sent_mask.permute(0,2,1).float(), sent_str_att_out)
-            if self.training and self.dropout_structured_attention > 0 and random.random() > self.dropout_structured_attention:
-                sent_str_att_out = sent_str_att_out * torch.zeros_like(sent_str_att_out)
+            # if self.training and self.dropout_structured_attention > 0 and random.random() > self.dropout_structured_attention:
+            #     sent_str_att_out = sent_str_att_out * torch.zeros_like(sent_str_att_out)
             str_outs.append(sent_str_att_out)
 
         if self.explicit_str_att:
