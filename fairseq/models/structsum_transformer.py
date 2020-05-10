@@ -168,7 +168,7 @@ class StructSumTransformerModel(FairseqEncoderDecoderModel):
                             help='if True, dont scale embeddings')
         parser.add_argument('--use_structured_attention', action='store_true',
                             help='if True, add structured attention module', default=False)
-        parser.add_argument('--detact_bart_encoder', action='store_true',
+        parser.add_argument('--detach_bart_encoder', action='store_true',
                             help='if True, detach encoder from structsum module', default=False)
         #args.use_structured_attention = getattr(args, 'use_structured_attention', True)
         # fmt: on
@@ -536,7 +536,6 @@ class TransformerEncoder(FairseqEncoder):
             enc_out = perm_enc_out.clone().detach()
         else:
             enc_out = perm_enc_out
-
         sent_level_encoder_out = torch.bmm(src_sent_mask.float(), enc_out)
         if self.use_structured_attention:
             sent_str_att_out, sent_str_att = self.structure_att(sent_level_encoder_out)
