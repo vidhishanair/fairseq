@@ -197,6 +197,7 @@ class SequenceGenerator(nn.Module):
         encoder_outs = self.model.forward_encoder(
             src_tokens=encoder_input["src_tokens"],
             src_lengths=encoder_input["src_lengths"],
+            src_sent_mask=encoder_input["src_sent_mask"]
         )
 
         # placeholder of indices for bsz * beam_size to hold tokens and accumulative scores
@@ -707,11 +708,11 @@ class EnsembleModel(nn.Module):
         return min([m.max_decoder_positions() for m in self.models])
 
     @torch.jit.export
-    def forward_encoder(self, src_tokens, src_lengths):
+    def forward_encoder(self, src_tokens, src_lengths, src_sent_mask=None):
         if not self.has_encoder():
             return None
         return [
-            model.encoder(src_tokens=src_tokens, src_lengths=src_lengths)
+            model.encoder(src_tokens=src_tokens, src_lengths=src_lengths, src_sent_mask=src_sent_mask)
             for model in self.models
         ]
 

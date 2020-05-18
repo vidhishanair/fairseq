@@ -433,6 +433,9 @@ class TransformerEncoder(FairseqEncoder):
         self.use_structured_attention = args.use_structured_attention
         self.explicit_str_att = args.explicit_str_att
         self.detach_bart_encoder = args.detach_bart_encoder
+        # self.use_structured_attention = True
+        # self.explicit_str_att = False
+        # self.detach_bart_encoder = False
         if not self.use_structured_attention and not self.explicit_str_att:
             print("One of --use_structured_attention or --explicit_str_att must be set")
             exit()
@@ -532,16 +535,20 @@ class TransformerEncoder(FairseqEncoder):
 
         perm_enc_out = x.permute(1,0,2)
         str_outs = [perm_enc_out]
+        
         if self.detach_bart_encoder:
             enc_out = perm_enc_out.clone().detach()
         else:
             enc_out = perm_enc_out
+        # print(src_sent_mask.size(), enc_out.size()) 
         sent_level_encoder_out = torch.bmm(src_sent_mask.float(), enc_out)
         if self.use_structured_attention:
             sent_str_att_out, sent_str_att = self.structure_att(sent_level_encoder_out)
+            print(sent_str_att_out)
             sent_str_att_out = torch.bmm(src_sent_mask.permute(0,2,1).float(), sent_str_att_out)
             # if self.training and self.dropout_structured_attention > 0 and random.random() > self.dropout_structured_attention:
             #     sent_str_att_out = sent_str_att_out * torch.zeros_like(sent_str_att_out)
+            #print(sent_str_att_out)
             str_outs.append(sent_str_att_out)
 
         if self.explicit_str_att:
@@ -554,8 +561,9 @@ class TransformerEncoder(FairseqEncoder):
             es_str_att_out = torch.bmm(src_sent_mask.permute(0,2,1).float(), es_str_att_out)
             str_outs.append(es_str_att_out)
 
-        str_att_enc_out = self.str_to_enc_linear(torch.cat(str_outs, dim=2))
-        x = str_att_enc_out.permute(1,0,2)
+        if self.use_structured_attention or self.explicit_str_att:
+            str_att_enc_out = self.str_to_enc_linear(torch.cat(str_outs, dim=2))
+            x = str_att_enc_out.permute(1,0,2)
             #encoder_out.encoder_out = str_att_enc_out
 
         return EncoderOut(

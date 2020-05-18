@@ -35,11 +35,13 @@ def collate(
             return False
         return True
 
-    def collate_sentid_tokens(key, left_pad=False, move_eos_to_beginning=False):
+    def collate_sentid_tokens(key, src_tokens, left_pad=False, move_eos_to_beginning=False):
         """Convert a list of 2d sent id tensors into a padded 3d tensor."""
         values = [s[key] for s in samples]
         max_src_sents = max(v.size(0) for v in values)
         max_src_words = max(v.size(1) for v in values)
+        #if max_src_words != src_tokens.size(1):
+        #    max_src_words = src_tokens.size(1)
         res = values[0].new(len(values), max_src_sents, max_src_words).fill_(pad_idx)
 
         def copy_tensor(src, dst):
@@ -86,7 +88,7 @@ def collate(
 
     id = torch.LongTensor([s['id'] for s in samples])
     src_tokens = merge('source', left_pad=left_pad_source)
-    src_sent_ids = collate_sentid_tokens('source_sent_ids', left_pad=left_pad_source)
+    src_sent_ids = collate_sentid_tokens('source_sent_ids', src_tokens, left_pad=left_pad_source)
 
 
     # sort by descending source length

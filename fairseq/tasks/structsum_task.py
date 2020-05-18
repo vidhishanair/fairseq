@@ -433,8 +433,10 @@ class StructSumTask(FairseqTask):
 
     def build_dataset_for_inference(self, src_tokens, src_lengths, src_sent_ids):
         sentids = []
-        for sid in src_sent_ids:
+        for idx, sid in enumerate(src_sent_ids):
             data = sid.split(" ")
+            #if len(data) != src_tokens[idx].size(0):
+            #print(len(data), src_tokens[idx].size())
             data = list(map(int, data))
             no_words = len(data)
             no_sents = data[-1]
