@@ -436,9 +436,10 @@ class TransformerEncoder(FairseqEncoder):
         # self.use_structured_attention = True
         # self.explicit_str_att = False
         # self.detach_bart_encoder = False
-        if not self.use_structured_attention and not self.explicit_str_att:
-            print("One of --use_structured_attention or --explicit_str_att must be set")
-            exit()
+
+        # if not self.use_structured_attention and not self.explicit_str_att:
+        #     print("One of --use_structured_attention or --explicit_str_att must be set")
+        #     exit()
         str_out_size = 0
         if args.use_structured_attention:
             print("Using Latent Structured Attention")
