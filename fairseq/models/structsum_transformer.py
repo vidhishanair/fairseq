@@ -433,6 +433,7 @@ class TransformerEncoder(FairseqEncoder):
         self.use_structured_attention = args.use_structured_attention
         self.explicit_str_att = args.explicit_str_att
         self.detach_bart_encoder = args.detach_bart_encoder
+        self.fp16 = args.fp16
         # self.use_structured_attention = True
         # self.explicit_str_att = False
         # self.detach_bart_encoder = False
@@ -542,7 +543,10 @@ class TransformerEncoder(FairseqEncoder):
         else:
             enc_out = perm_enc_out
         # print(src_sent_mask.size(), enc_out.size()) 
-        sent_level_encoder_out = torch.bmm(src_sent_mask.float(), enc_out)
+        if self.fp16:
+            sent_level_encoder_out = torch.bmm(src_sent_mask.half(), enc_out)
+        else:    
+            sent_level_encoder_out = torch.bmm(src_sent_mask.float(), enc_out)
         if self.use_structured_attention:
             sent_str_att_out, sent_str_att = self.structure_att(sent_level_encoder_out)
             print(sent_str_att_out)
