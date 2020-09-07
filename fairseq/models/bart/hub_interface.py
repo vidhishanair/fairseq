@@ -66,15 +66,27 @@ class BARTHubInterface(nn.Module):
             >>> bart.encode('world').tolist()
             [0, 8331, 2]
         """
-        tokens = self.bpe.encode(sentence)
+        sentences = sentence.split(" <split1> ")
+        sentids = []
+        tokens = []
+        for idx, sent in enumerate(sentences):
+            sent_tokens = self.bpe.encode(sent)
+            tokens.append(sent_tokens)
+            sentids.append(" ".join([str(idx)]*len(sent_tokens.split(" "))))
+        #tokens = self.bpe.encode(sentence)
+        tokens = " ".join(tokens)
+        sentids = " ".join(sentids)
         if len(tokens.split(' ')) > self.max_positions - 2:
             tokens = ' '.join(tokens.split(' ')[:self.max_positions - 2])
+            sentids = ' '.join(sentids.split(' ')[:self.max_positions - 2])
+            
         bpe_sentence = '<s> ' + tokens + ' </s>'
+        sentids = '0 '+sentids+' '+str(tokens[-1])
         for s in addl_sentences:
             bpe_sentence += (' </s>' if not no_separator else '')
             bpe_sentence += ' ' + self.bpe.encode(s) + ' </s>'
         tokens = self.task.source_dictionary.encode_line(bpe_sentence, append_eos=False)
-        return tokens.long()
+        return tokens.long(), sentids
 
     def decode(self, tokens: torch.LongTensor):
         assert tokens.dim() == 1
@@ -111,7 +123,20 @@ class BARTHubInterface(nn.Module):
 
     def sample(self, sentences: List[str], beam: int = 1, verbose: bool = False, src_sent_ids=None,  **kwargs) -> str:
         input = [self.encode(sentence) for sentence in sentences]
-        hypos = self.generate(input, beam, verbose, src_sent_ids=src_sent_ids, **kwargs)
+        trunc_sent_ids = [x[1] for x in input]
+        input = [x[0] for x in input]
+        # for i in range(len(input)):
+        #     print("in sample", len(trunc_sent_ids[i].split(' ')), input[i].size())
+        # trunc_sent_ids = []
+        # print(len(input))
+        # for idx, tokens in enumerate(src_sent_ids):
+        #     print("in sample", len(tokens.split(' ')), input[idx].size())
+        #     if len(tokens.split(' ')) > self.max_positions - 2:
+        #         tokens = tokens.split(' ')[:self.max_positions - 2]
+        #         tokens = [tokens[0]] + tokens + [tokens[-1]]
+        #         tokens = ' '.join(tokens) 
+        #     trunc_sent_ids.append(tokens)
+        hypos = self.generate(input, beam, verbose, src_sent_ids=trunc_sent_ids, **kwargs)
         return [self.decode(x['tokens']) for x in hypos]
 
     def generate(self, tokens: List[torch.LongTensor], beam: int = 5, verbose: bool = False, src_sent_ids=None, **kwargs) -> torch.LongTensor:

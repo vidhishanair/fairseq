@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 def collate(
         samples, pad_idx, eos_idx, left_pad_source=True, left_pad_target=False,
-        input_feeding=True,
+        input_feeding=True, explicit_str_att=False
 ):
     if len(samples) == 0:
         return {}
@@ -35,11 +35,13 @@ def collate(
             return False
         return True
 
-    def collate_sentid_tokens(key, left_pad=False, move_eos_to_beginning=False):
+    def collate_sentid_tokens(key, src_tokens, left_pad=False, move_eos_to_beginning=False):
         """Convert a list of 2d sent id tensors into a padded 3d tensor."""
         values = [s[key] for s in samples]
         max_src_sents = max(v.size(0) for v in values)
         max_src_words = max(v.size(1) for v in values)
+        #if max_src_words != src_tokens.size(1):
+        #    max_src_words = src_tokens.size(1)
         res = values[0].new(len(values), max_src_sents, max_src_words).fill_(pad_idx)
 
         def copy_tensor(src, dst):
@@ -53,6 +55,21 @@ def collate(
 
         for i, v in enumerate(values):
             copy_tensor(v, res[i, :v.size(0), max_src_words - v.size(1):] if left_pad else res[i, :v.size(0), :v.size(1)])
+        return res
+
+    def collate_es_adj_mat(key, src_key):
+        """Convert a list of 2d sent id tensors into a padded 3d tensor."""
+        truncated_sent_lens = [s[src_key].size(0) for s in samples]
+        values = [s[key][:truncated_sent_lens[idx]][:truncated_sent_lens[idx]] for idx, s in enumerate(samples)]
+        max_src_sents = max(v.size(0) for v in values)
+        res = torch.zeros((len(values), max_src_sents, max_src_sents), dtype=torch.float32).fill_(pad_idx)
+
+        def copy_tensor(src, dst):
+            assert dst.numel() == src.numel()
+            dst.copy_(src)
+
+        for i, v in enumerate(values):
+            copy_tensor(v, res[i, :v.size(0), :v.size(1)])
         return res
 
     def compute_alignment_weights(alignments):
@@ -71,7 +88,9 @@ def collate(
 
     id = torch.LongTensor([s['id'] for s in samples])
     src_tokens = merge('source', left_pad=left_pad_source)
-    src_sent_ids = collate_sentid_tokens('source_sent_ids', left_pad=left_pad_source)
+    src_sent_ids = collate_sentid_tokens('source_sent_ids', src_tokens, left_pad=left_pad_source)
+
+
     # sort by descending source length
     src_lengths = torch.LongTensor([s['source'].numel() for s in samples])
     src_lengths, sort_order = src_lengths.sort(descending=True)
@@ -109,6 +128,11 @@ def collate(
         },
         'target': target,
     }
+    if explicit_str_att:
+        es_adj_mat = collate_es_adj_mat('es_adj_mat', 'source_sent_ids')
+        es_adj_mat = es_adj_mat.index_select(0, sort_order)
+        batch['net_input']['es_adj_mat'] = es_adj_mat
+    
     if prev_output_tokens is not None:
         batch['net_input']['prev_output_tokens'] = prev_output_tokens
 
@@ -181,7 +205,8 @@ class StructSumDataset(FairseqDataset):
             shuffle=True, input_feeding=True,
             remove_eos_from_source=False, append_eos_to_target=False,
             align_dataset=None,
-            append_bos=False, eos=None, src_sent_ids=None, split='None'
+            append_bos=False, eos=None, src_sent_ids=None, split='None',
+            chains_dataset=None, explicit_str_att=False
     ):
         if tgt_dict is not None:
             assert src_dict.pad() == tgt_dict.pad()
@@ -191,6 +216,7 @@ class StructSumDataset(FairseqDataset):
         self.src = src
         self.tgt = tgt
         self.src_sent_ids = src_sent_ids
+        self.chains_dataset = chains_dataset
         self.src_sizes = np.array(src_sizes)
         self.tgt_sizes = np.array(tgt_sizes) if tgt_sizes is not None else None
         self.src_dict = src_dict
@@ -208,6 +234,7 @@ class StructSumDataset(FairseqDataset):
             assert self.tgt_sizes is not None, "Both source and target needed when alignments are provided"
         self.append_bos = append_bos
         self.eos = (eos if eos is not None else src_dict.eos())
+        self.explicit_str_att = explicit_str_att
 
     def __getitem__(self, index):
         tgt_item = self.tgt[index] if self.tgt is not None else None
@@ -245,6 +272,8 @@ class StructSumDataset(FairseqDataset):
             'target': tgt_item,
             'source_sent_ids': src_sent_id_item,
         }
+        if self.explicit_str_att:
+            example['es_adj_mat'] = self.chains_dataset[index]
         if self.align_dataset is not None:
             example['alignment'] = self.align_dataset[index]
         return example
@@ -287,7 +316,7 @@ class StructSumDataset(FairseqDataset):
         return collate(
             samples, pad_idx=self.src_dict.pad(), eos_idx=self.eos,
             left_pad_source=self.left_pad_source, left_pad_target=self.left_pad_target,
-            input_feeding=self.input_feeding,
+            input_feeding=self.input_feeding, explicit_str_att=self.explicit_str_att
         )
 
     def num_tokens(self, index):
