@@ -549,7 +549,7 @@ class TransformerEncoder(FairseqEncoder):
             sent_level_encoder_out = torch.bmm(src_sent_mask.float(), enc_out)
         if self.use_structured_attention:
             sent_str_att_out, sent_str_att = self.structure_att(sent_level_encoder_out)
-            print(sent_str_att_out)
+            #print(sent_str_att_out)
             sent_str_att_out = torch.bmm(src_sent_mask.permute(0,2,1).float(), sent_str_att_out)
             # if self.training and self.dropout_structured_attention > 0 and random.random() > self.dropout_structured_attention:
             #     sent_str_att_out = sent_str_att_out * torch.zeros_like(sent_str_att_out)
