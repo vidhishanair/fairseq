@@ -132,3 +132,8 @@ data-bin/
 experimental/*
 *.sh
 saved_models/*
+
+
+# vim swap files
+*.swp
+*.swo

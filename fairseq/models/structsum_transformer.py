@@ -404,6 +404,7 @@ class TransformerEncoder(FairseqEncoder):
             if not args.no_token_positional_embeddings
             else None
         )
+        # if freeze bart do this rishabh
         # if self.freeze_bart:
         #     self.embed_positions.weight.requires_grad = False
         #     self.embed_positions.bias.requires_grad = False
@@ -460,7 +461,7 @@ class TransformerEncoder(FairseqEncoder):
             self.fzlinear = None
 
         if self.use_structured_attention or self.explicit_str_att:
-            self.str_to_enc_linear = nn.Linear(str_out_size+args.encoder_embed_dim, args.encoder_embed_dim)
+            self.str_to_enc_linear = nn.Linear(str_out_size+args.encoder_embed_dim, args.encoder_embed_dim) # bring it back to original encoder
         else:
             self.str_to_enc_linear = None
 
@@ -541,16 +542,16 @@ class TransformerEncoder(FairseqEncoder):
         if self.detach_bart_encoder:
             enc_out = perm_enc_out.clone().detach()
         else:
-            enc_out = perm_enc_out
+            enc_out = perm_enc_out                          # for token level rishabh
         # print(src_sent_mask.size(), enc_out.size()) 
         if self.fp16:
             sent_level_encoder_out = torch.bmm(src_sent_mask.half(), enc_out)
         else:    
-            sent_level_encoder_out = torch.bmm(src_sent_mask.float(), enc_out)
+            sent_level_encoder_out = torch.bmm(src_sent_mask.float(), enc_out)          # which word belongs to which sent. sum of all token level reps. 
         if self.use_structured_attention:
             sent_str_att_out, sent_str_att = self.structure_att(sent_level_encoder_out)
             print(sent_str_att_out)
-            sent_str_att_out = torch.bmm(src_sent_mask.permute(0,2,1).float(), sent_str_att_out)
+            sent_str_att_out = torch.bmm(src_sent_mask.permute(0,2,1).float(), sent_str_att_out)        # convert back to token level
             # if self.training and self.dropout_structured_attention > 0 and random.random() > self.dropout_structured_attention:
             #     sent_str_att_out = sent_str_att_out * torch.zeros_like(sent_str_att_out)
             #print(sent_str_att_out)
@@ -562,12 +563,13 @@ class TransformerEncoder(FairseqEncoder):
             adj_mat = adj_mat/row_sums.expand_as(adj_mat)
             tp = F.tanh(self.tp_linear(sent_level_encoder_out)) # b*s, token, h1
             attended_hidden = torch.bmm(adj_mat, tp)
-            es_str_att_out = F.relu(self.fzlinear(attended_hidden))
-            es_str_att_out = torch.bmm(src_sent_mask.permute(0,2,1).float(), es_str_att_out)
+            es_str_att_out = F.relu(self.fzlinear(attended_hidden))                         # es adj matrix
+            es_str_att_out = torch.bmm(src_sent_mask.permute(0,2,1).float(), es_str_att_out)        # back to token level
             str_outs.append(es_str_att_out)
 
         if self.use_structured_attention or self.explicit_str_att:
             str_att_enc_out = self.str_to_enc_linear(torch.cat(str_outs, dim=2))
+            # add residual here sum and normalize rishabh
             x = str_att_enc_out.permute(1,0,2)
             #encoder_out.encoder_out = str_att_enc_out
 

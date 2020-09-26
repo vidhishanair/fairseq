@@ -5,8 +5,8 @@ MAX_TOKENS=800
 #MAX_TOKENS=1024
 UPDATE_FREQ=4
 BART_PATH=bart.large.cnn/model.pt
-SAVE_DIR=saved_models/cnn_latent_str_mtokens800_lr1e-5
-#SAVE_DIR=saved_models/test2
+#SAVE_DIR=saved_models/cnn_latent_str_mtokens800_lr1e-5
+SAVE_DIR=saved_models/residual_test
 mkdir $SAVE_DIR
 
 CUDA_VISIBLE_DEVICES=0,1,2,3 python train.py /home/ubuntu/projects/datasets/cnn_dm_sentids-bin \
