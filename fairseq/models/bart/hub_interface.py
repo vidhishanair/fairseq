@@ -121,7 +121,7 @@ class BARTHubInterface(nn.Module):
         )
         return sample
 
-    def sample(self, sentences: List[str], beam: int = 1, verbose: bool = False, src_sent_ids=None,  **kwargs) -> str:
+    def sample(self, sentences: List[str], beam: int = 1, verbose: bool = False, **kwargs) -> str:
         input = [self.encode(sentence) for sentence in sentences]
         trunc_sent_ids = [x[1] for x in input]
         input = [x[0] for x in input]
