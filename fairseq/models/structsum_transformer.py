@@ -168,6 +168,10 @@ class StructSumTransformerModel(FairseqEncoderDecoderModel):
                             help='if True, dont scale embeddings')
         parser.add_argument('--use_structured_attention', action='store_true',
                             help='if True, add structured attention module', default=False)
+        parser.add_argument('--explicit_str_att', action='store_true',
+                            help='if True, add explicit structured attention module', default=False)
+        parser.add_argument('--identity_init', action='store_true',
+                            help='if True, use identity initialization', default=False)
         parser.add_argument('--detach_bart_encoder', action='store_true',
                             help='if True, detach encoder from structsum module', default=False)
         #args.use_structured_attention = getattr(args, 'use_structured_attention', True)
@@ -404,7 +408,6 @@ class TransformerEncoder(FairseqEncoder):
             if not args.no_token_positional_embeddings
             else None
         )
-        # if freeze bart do this rishabh
         # if self.freeze_bart:
         #     self.embed_positions.weight.requires_grad = False
         #     self.embed_positions.bias.requires_grad = False
@@ -431,9 +434,11 @@ class TransformerEncoder(FairseqEncoder):
         else:
             self.layernorm_embedding = None
 
-        self.use_structured_attention = args.use_structured_attention
-        self.explicit_str_att = args.explicit_str_att
+        self.use_structured_attention = args.use_structured_attention			# HARD CODED by Rishabh
+        self.explicit_str_att = args.explicit_str_att					# HARD CODED by Rishabh
         self.detach_bart_encoder = args.detach_bart_encoder
+	self.use_identity_init = args.identity_init
+        print ('Using Identity init : ', self.use_identity_init)
         self.fp16 = args.fp16
         # self.use_structured_attention = True
         # self.explicit_str_att = False
@@ -443,25 +448,32 @@ class TransformerEncoder(FairseqEncoder):
         #     print("One of --use_structured_attention or --explicit_str_att must be set")
         #     exit()
         str_out_size = 0
-        if args.use_structured_attention:
+        if self.use_structured_attention:
             print("Using Latent Structured Attention")
             self.structure_att = StructuredAttention(sent_hiddent_size=args.encoder_embed_dim,
                                                      bidirectional=False,
-                                                     py_version='nightly')
+                                                     py_version='nightly', identity_init = self.use_identity_init)
             str_out_size += args.encoder_embed_dim//2
         else:
+            print("NOT Using Latent Structured Attention")
             self.structure_att = None
         if self.explicit_str_att:
             print("Using Explicit Structured Attention")
             self.tp_linear = nn.Linear(args.encoder_embed_dim, args.encoder_embed_dim//2, bias=True)
             self.fzlinear = nn.Linear(args.encoder_embed_dim//2, args.encoder_embed_dim//2, bias=True)
+			if self.use_identity_init:
+				nn.init.eye_(self.tp_linear.weight)
+				nn.init.eye_(self.fzlinear.weight)
             str_out_size += args.encoder_embed_dim//2
         else:
+            print("NOT Using Explicit Structured Attention")
             self.tp_linear = None
             self.fzlinear = None
 
         if self.use_structured_attention or self.explicit_str_att:
-            self.str_to_enc_linear = nn.Linear(str_out_size+args.encoder_embed_dim, args.encoder_embed_dim) # bring it back to original encoder
+            self.str_to_enc_linear = nn.Linear(str_out_size+args.encoder_embed_dim, args.encoder_embed_dim)
+			if self.use_identity_init:
+				nn.init.eye_(self.str_to_enc_linear)
         else:
             self.str_to_enc_linear = None
 
@@ -542,16 +554,16 @@ class TransformerEncoder(FairseqEncoder):
         if self.detach_bart_encoder:
             enc_out = perm_enc_out.clone().detach()
         else:
-            enc_out = perm_enc_out                          # for token level rishabh
+            enc_out = perm_enc_out
         # print(src_sent_mask.size(), enc_out.size()) 
         if self.fp16:
             sent_level_encoder_out = torch.bmm(src_sent_mask.half(), enc_out)
         else:    
-            sent_level_encoder_out = torch.bmm(src_sent_mask.float(), enc_out)          # which word belongs to which sent. sum of all token level reps. 
+            sent_level_encoder_out = torch.bmm(src_sent_mask.float(), enc_out)
         if self.use_structured_attention:
             sent_str_att_out, sent_str_att = self.structure_att(sent_level_encoder_out)
             #print(sent_str_att_out)
-            sent_str_att_out = torch.bmm(src_sent_mask.permute(0,2,1).float(), sent_str_att_out)        # convert back to token level
+            sent_str_att_out = torch.bmm(src_sent_mask.permute(0,2,1).float(), sent_str_att_out)
             # if self.training and self.dropout_structured_attention > 0 and random.random() > self.dropout_structured_attention:
             #     sent_str_att_out = sent_str_att_out * torch.zeros_like(sent_str_att_out)
             #print(sent_str_att_out)
@@ -563,13 +575,13 @@ class TransformerEncoder(FairseqEncoder):
             adj_mat = adj_mat/row_sums.expand_as(adj_mat)
             tp = F.tanh(self.tp_linear(sent_level_encoder_out)) # b*s, token, h1
             attended_hidden = torch.bmm(adj_mat, tp)
-            es_str_att_out = F.relu(self.fzlinear(attended_hidden))                         # es adj matrix
-            es_str_att_out = torch.bmm(src_sent_mask.permute(0,2,1).float(), es_str_att_out)        # back to token level
+            es_str_att_out = F.relu(self.fzlinear(attended_hidden))
+            es_str_att_out = torch.bmm(src_sent_mask.permute(0,2,1).float(), es_str_att_out)
             str_outs.append(es_str_att_out)
 
         if self.use_structured_attention or self.explicit_str_att:
             str_att_enc_out = self.str_to_enc_linear(torch.cat(str_outs, dim=2))
-            # add residual here sum and normalize rishabh
+            str_att_enc_out = 0.001*str_att_enc_out + 0.999*perm_enc_out # RESIDUAL # ADDED
             x = str_att_enc_out.permute(1,0,2)
             #encoder_out.encoder_out = str_att_enc_out
 
