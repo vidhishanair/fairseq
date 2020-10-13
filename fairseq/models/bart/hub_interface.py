@@ -101,13 +101,15 @@ class BARTHubInterface(nn.Module):
             return sentences[0]
         return sentences
 
-    def _build_sample(self, src_tokens: List[torch.LongTensor], src_sent_ids=None):
+    def _build_sample(self, src_tokens: List[torch.LongTensor], src_sent_ids=None, chains_dataset=None):
         # assert torch.is_tensor(src_tokens)
         if src_sent_ids is not None:
             dataset = self.task.build_dataset_for_inference(
                 src_tokens,
                 [x.numel() for x in src_tokens],
-                src_sent_ids=src_sent_ids
+                src_sent_ids=src_sent_ids,
+                chains_dataset=chains_dataset,
+                explicit_str_att=chains_dataset is not None
             )
         else:
             dataset = self.task.build_dataset_for_inference(
@@ -121,7 +123,7 @@ class BARTHubInterface(nn.Module):
         )
         return sample
 
-    def sample(self, sentences: List[str], beam: int = 1, verbose: bool = False, src_sent_ids=None,  **kwargs) -> str:
+    def sample(self, sentences: List[str], beam: int = 1, verbose: bool = False, **kwargs) -> str:
         input = [self.encode(sentence) for sentence in sentences]
         trunc_sent_ids = [x[1] for x in input]
         input = [x[0] for x in input]
@@ -140,7 +142,10 @@ class BARTHubInterface(nn.Module):
         return [self.decode(x['tokens']) for x in hypos]
 
     def generate(self, tokens: List[torch.LongTensor], beam: int = 5, verbose: bool = False, src_sent_ids=None, **kwargs) -> torch.LongTensor:
-        sample = self._build_sample(tokens, src_sent_ids=src_sent_ids)
+        chains_dataset = None
+        if 'chains_dataset' in kwargs:
+            chains_dataset = kwargs['chains_dataset']
+        sample = self._build_sample(tokens, src_sent_ids=src_sent_ids, chains_dataset=chains_dataset)
 
         # build generator using current args as well as any kwargs
         gen_args = copy.copy(self.args)
