@@ -431,7 +431,7 @@ class StructSumTask(FairseqTask):
             explicit_str_att=self.args.explicit_str_att
         )
 
-    def build_dataset_for_inference(self, src_tokens, src_lengths, src_sent_ids):
+    def build_dataset_for_inference(self, src_tokens, src_lengths, src_sent_ids, chains_dataset=None, explicit_str_att=None):
         sentids = []
         for idx, sid in enumerate(src_sent_ids):
             data = sid.split(" ")
@@ -446,7 +446,11 @@ class StructSumTask(FairseqTask):
                 one_hot_data[id, data.eq(id)] = 1
             data = torch.from_numpy(one_hot_data)
             sentids.append(data)
-        return StructSumDataset(src_tokens, src_lengths, self.source_dictionary, src_sent_ids=sentids)
+        return StructSumDataset(src_tokens, src_lengths,
+                                self.source_dictionary,
+                                src_sent_ids=sentids,
+                                chains_dataset=chains_dataset,
+                                explicit_str_att=explicit_str_att)
 
     def build_model(self, args):
         model = super().build_model(args)
