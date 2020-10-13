@@ -4,11 +4,11 @@ LR=1e-05
 MAX_TOKENS=1024
 UPDATE_FREQ=4
 BART_PATH=bart.large/model.pt
-SAVE_DIR=saved_models/subset10000_bart_mtokens1024_lr1e-5
+SAVE_DIR=saved_models/subset_bart_mtokens1024_lr1e-5
 #SAVE_DIR=saved_models/test2
 mkdir $SAVE_DIR
 
-CUDA_VISIBLE_DEVICES=0,1,2,3 python train.py /home/ubuntu/projects/datasets/cnn_dm_sentids_10000-bin \
+CUDA_VISIBLE_DEVICES=0,1,2,3 python train.py /home/ubuntu/projects/datasets/cnn_dm_sentids-bin \
     --restore-file $BART_PATH \
     --max-tokens $MAX_TOKENS \
     --max-tokens-valid $MAX_TOKENS \
@@ -30,5 +30,5 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 python train.py /home/ubuntu/projects/datasets/cnn_
     --lr-scheduler polynomial_decay --lr $LR --total-num-update $TOTAL_NUM_UPDATES --warmup-updates $WARMUP_UPDATES \
     --update-freq $UPDATE_FREQ \
     --skip-invalid-size-inputs-valid-test \
-    --find-unused-parameters;
+    --find-unused-parameters > $SAVE_DIR/train.log 2>&1 &
 #--fp16

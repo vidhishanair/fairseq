@@ -60,15 +60,24 @@ def collate(
     def collate_es_adj_mat(key, src_key):
         """Convert a list of 2d sent id tensors into a padded 3d tensor."""
         truncated_sent_lens = [s[src_key].size(0) for s in samples]
-        values = [s[key][:truncated_sent_lens[idx]][:truncated_sent_lens[idx]] for idx, s in enumerate(samples)]
+        values = [s[key][:truncated_sent_lens[idx], :truncated_sent_lens[idx]] for idx, s in enumerate(samples)]
+        #values = [v[:][:truncated_sent_lens[idx]] for idx, v in enumerate(values)]
         max_src_sents = max(v.size(0) for v in values)
         res = torch.zeros((len(values), max_src_sents, max_src_sents), dtype=torch.float32).fill_(pad_idx)
 
         def copy_tensor(src, dst):
+            #print(dst, dst.size())
+            #print(src, src.size())
+            #print(truncated_sent_lens, max_src_sents)
+            #print([v.size() for v in values])
+            #print([s[src_key].size() for s in samples])
+            #print([s[key].size() for s in samples])
             assert dst.numel() == src.numel()
             dst.copy_(src)
 
         for i, v in enumerate(values):
+            #print(v.size(), res[i, :v.size(0), :v.size(1)].size())
+            #print(v[:666666][:6].size())
             copy_tensor(v, res[i, :v.size(0), :v.size(1)])
         return res
 

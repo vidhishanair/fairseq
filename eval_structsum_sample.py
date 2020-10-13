@@ -4,20 +4,24 @@ import torch
 # from fairseq.models.bart import BARTModel
 from fairseq.models.bart import StructSumBARTModel
 
-dirname = 'saved_models/subset10000_latent_str_mtokens1024_lr1e-5/'
+#dirname = 'saved_models/subset10000_latent_str_mtokens1024_lr1e-5/'
+#dirname = 'saved_models/cnn_latent_str_mtokens800_lr1e-5/'
+import sys
+fname = sys.argv[1]
+dirname = 'saved_models/' + fname + '/' #init_test_999residual/'
 bart = StructSumBARTModel.from_pretrained(
     dirname,
     checkpoint_file='checkpoint_best.pt',
-    data_name_or_path='/home/ubuntu/projects/datasets/cnn_dm_sentids-bin'
+    data_name_or_path='/home/ubuntu/projects/datasets_vid2/cnn_dm_sentids-bin'
 )
 
 bart.cuda()
 bart.eval()
-bart.half()
+#bart.half()
 count = 1
-bsz = 32
-with open('/home/ubuntu/projects/datasets/cnn_dm_sentids_10000/test.source') as source,\
-        open('/home/ubuntu/projects/datasets/cnn_dm_sentids_10000/test.source-target.source.sentids') as source_sentids,\
+bsz = 16
+with open('/home/ubuntu/projects/datasets_vid2/cnn_dm_sentids/test.source') as source,\
+        open('/home/ubuntu/projects/datasets_vid2/cnn_dm_sentids/test.source-target.source.sentids') as source_sentids,\
         open(dirname+'/test.hypo', 'w') as fout:
     sline = source.readline().strip()
     sids = source_sentids.readline().strip()
@@ -47,7 +51,7 @@ with open('/home/ubuntu/projects/datasets/cnn_dm_sentids_10000/test.source') as 
             fout.flush()
 
 hyp_path = dirname+"/test.hypo"
-ref_path = '/home/ubuntu/projects/datasets/cnn_dm_sentids_10000/test.target'
+ref_path = '/home/ubuntu/projects/datasets_vid2/cnn_dm_sentids/test.target'
 results = files2rouge.run(hyp_path, ref_path)
 print(results)
 wp = open(dirname+"/rouge_results.txt", 'w')
