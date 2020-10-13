@@ -27,17 +27,17 @@ class StructuredAttention(nn.Module):
 
         # initializations
         if identity_init == False:
-			nn.init.xavier_uniform_(self.tp_linear.weight)
-			nn.init.xavier_uniform_(self.tc_linear.weight)
-			nn.init.xavier_uniform_(self.fi_linear.weight)
-			nn.init.xavier_uniform_(self.exparam)
-			nn.init.xavier_uniform_(self.fzlinear.weight)
+            nn.init.xavier_uniform_(self.tp_linear.weight)
+            nn.init.xavier_uniform_(self.tc_linear.weight)
+            nn.init.xavier_uniform_(self.fi_linear.weight)
+            nn.init.xavier_uniform_(self.exparam)
+            nn.init.xavier_uniform_(self.fzlinear.weight)
         else:
-			nn.init.eye_(self.tp_linear.weight)
-			nn.init.eye_(self.tc_linear.weight)
-			nn.init.eye_(self.fi_linear.weight)
-			nn.init.eye_(self.exparam)
-			nn.init.eye_(self.fzlinear.weight)
+            nn.init.eye_(self.tp_linear.weight)
+            nn.init.eye_(self.tc_linear.weight)
+            nn.init.eye_(self.fi_linear.weight)
+            nn.init.ones_(self.exparam)
+            nn.init.eye_(self.fzlinear.weight)
         nn.init.constant_(self.tp_linear.bias, 0)
         nn.init.constant_(self.tc_linear.bias, 0)
         nn.init.constant_(self.fzlinear.bias, 0)

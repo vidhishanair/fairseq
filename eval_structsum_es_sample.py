@@ -5,28 +5,27 @@ import torch
 from fairseq.models.bart import StructSumBARTModel
 from fairseq.tasks.structsum_task import ChainsDataset
 
-dirname = 'saved_models/subset10000_latent_str_mtokens1024_lr1e-5/'
+dirname = 'saved_models/explicit_nonorm_999/'
 bart = StructSumBARTModel.from_pretrained(
     dirname,
     checkpoint_file='checkpoint_best.pt',
-    data_name_or_path='/home/ubuntu/projects/datasets/cnn_dm_sentids_chains-bin'
+    data_name_or_path='/home/ubuntu/projects/datasets_vid2/cnn_dm_sentids_chains-bin'
 )
 
 bart.cuda()
 bart.eval()
-bart.half()
+#bart.half()
 count = 1
-bsz = 32
+bsz = 8
 
-chains_dataset = ChainsDataset("open('/home/ubuntu/projects/datasets/cnn_dm_sentids_chains/test.chains")
+chains_dataset = ChainsDataset("/home/ubuntu/projects/datasets_vid2/cnn_dm_sentids_chains/test.source-target.source.chains")
 
-with open('/home/ubuntu/projects/datasets/cnn_dm_sentids_chains/test.source') as source, \
-        open('/home/ubuntu/projects/datasets/cnn_dm_sentids_chains/test.source-target.source.sentids') as source_sentids, \
-        open('/home/ubuntu/projects/datasets/cnn_dm_sentids_chains/test.chains') as source_chains, \
+with open('/home/ubuntu/projects/datasets_vid2/cnn_dm_sentids_chains/test.source') as source, \
+        open('/home/ubuntu/projects/datasets_vid2/cnn_dm_sentids_chains/test.source-target.source.sentids') as source_sentids, \
         open(dirname+'/test.hypo', 'w') as fout:
     sline = source.readline().strip()
     sids = source_sentids.readline().strip()
-    schains = source_chains.readline().strip()
+    #schains = source_chains.readline().strip()
     slines = [sline]
     sentids = [sids]
     sent_es_chains = [chains_dataset[0]]
@@ -57,7 +56,7 @@ with open('/home/ubuntu/projects/datasets/cnn_dm_sentids_chains/test.source') as
             fout.flush()
 
 hyp_path = dirname+"/test.hypo"
-ref_path = '/home/ubuntu/projects/datasets/cnn_dm_sentids_chains/test.target'
+ref_path = '/home/ubuntu/projects/datasets_vid2/cnn_dm_sentids_chains/test.target'
 results = files2rouge.run(hyp_path, ref_path)
 print(results)
 wp = open(dirname+"/rouge_results.txt", 'w')
