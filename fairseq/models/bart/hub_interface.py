@@ -81,7 +81,8 @@ class BARTHubInterface(nn.Module):
             sentids = ' '.join(sentids.split(' ')[:self.max_positions - 2])
             
         bpe_sentence = '<s> ' + tokens + ' </s>'
-        sentids = '0 '+sentids+' '+str(tokens[-1])
+        #sentids = '0 '+sentids+' '+str(tokens[-1])
+        sentids = '0 '+sentids+' '+str(idx)
         for s in addl_sentences:
             bpe_sentence += (' </s>' if not no_separator else '')
             bpe_sentence += ' ' + self.bpe.encode(s) + ' </s>'

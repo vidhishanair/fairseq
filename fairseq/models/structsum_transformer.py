@@ -168,10 +168,12 @@ class StructSumTransformerModel(FairseqEncoderDecoderModel):
                             help='if True, dont scale embeddings')
         parser.add_argument('--use_structured_attention', action='store_true',
                             help='if True, add structured attention module', default=False)
-        parser.add_argument('--explicit_str_att', action='store_true',
-                            help='if True, add explicit structured attention module', default=False)
+        #parser.add_argument('--explicit_str_att', action='store_true',
+                            #help='if True, add explicit structured attention module', default=False)
         parser.add_argument('--identity_init', action='store_true',
                             help='if True, use identity initialization', default=False)
+        parser.add_argument('--use_layer_norm', action='store_true',
+                            help='if True, use layer norm', default=False)
         parser.add_argument('--detach_bart_encoder', action='store_true',
                             help='if True, detach encoder from structsum module', default=False)
         #args.use_structured_attention = getattr(args, 'use_structured_attention', True)
@@ -437,8 +439,10 @@ class TransformerEncoder(FairseqEncoder):
         self.use_structured_attention = args.use_structured_attention			# HARD CODED by Rishabh
         self.explicit_str_att = args.explicit_str_att					# HARD CODED by Rishabh
         self.detach_bart_encoder = args.detach_bart_encoder
-	self.use_identity_init = args.identity_init
+        self.use_identity_init = args.identity_init
         print ('Using Identity init : ', self.use_identity_init)
+        self.use_layer_norm = args.use_layer_norm
+        print ('Using Layer Norm: ', self.use_layer_norm)
         self.fp16 = args.fp16
         # self.use_structured_attention = True
         # self.explicit_str_att = False
@@ -459,12 +463,18 @@ class TransformerEncoder(FairseqEncoder):
             self.structure_att = None
         if self.explicit_str_att:
             print("Using Explicit Structured Attention")
-            self.tp_linear = nn.Linear(args.encoder_embed_dim, args.encoder_embed_dim//2, bias=True)
-            self.fzlinear = nn.Linear(args.encoder_embed_dim//2, args.encoder_embed_dim//2, bias=True)
-			if self.use_identity_init:
-				nn.init.eye_(self.tp_linear.weight)
-				nn.init.eye_(self.fzlinear.weight)
-            str_out_size += args.encoder_embed_dim//2
+            #self.tp_linear = nn.Linear(args.encoder_embed_dim, args.encoder_embed_dim//2, bias=True)
+            #self.fzlinear = nn.Linear(args.encoder_embed_dim//2, args.encoder_embed_dim//2, bias=True)
+            #if self.use_identity_init:
+                #nn.init.eye_(self.tp_linear.weight)
+                #nn.init.eye_(self.fzlinear.weight)
+            #str_out_size += args.encoder_embed_dim//2
+            self.tp_linear = nn.Linear(args.encoder_embed_dim, args.encoder_embed_dim, bias=True)
+            self.fzlinear = nn.Linear(args.encoder_embed_dim, args.encoder_embed_dim, bias=True)
+            if self.use_identity_init:
+                nn.init.eye_(self.tp_linear.weight)
+                nn.init.eye_(self.fzlinear.weight)
+            str_out_size += args.encoder_embed_dim
         else:
             print("NOT Using Explicit Structured Attention")
             self.tp_linear = None
@@ -472,10 +482,21 @@ class TransformerEncoder(FairseqEncoder):
 
         if self.use_structured_attention or self.explicit_str_att:
             self.str_to_enc_linear = nn.Linear(str_out_size+args.encoder_embed_dim, args.encoder_embed_dim)
-			if self.use_identity_init:
-				nn.init.eye_(self.str_to_enc_linear)
+            if self.use_identity_init:
+                nn.init.eye_(self.str_to_enc_linear.weight)
         else:
             self.str_to_enc_linear = None
+
+        if self.use_layer_norm:
+            self.structured_attn_layer_norm = nn.LayerNorm(args.encoder_embed_dim//2)
+            self.explicit_str_att_layer_norm = nn.LayerNorm(args.encoder_embed_dim//2)
+            self.joint_str_layer_norm = nn.LayerNorm(args.encoder_embed_dim)
+            self.post_residual_layer_norm = nn.LayerNorm(args.encoder_embed_dim)
+        else:
+            self.structured_attn_layer_norm = None
+            self.explicit_str_att_layer_norm = None
+            self.joint_str_layer_norm = None
+            self.post_residual_layer_norm = None
 
     def build_encoder_layer(self, args):
         return TransformerEncoderLayer(args)
@@ -544,6 +565,9 @@ class TransformerEncoder(FairseqEncoder):
                     encoder_states.append(x)
 
         if self.layer_norm is not None:
+            #print (x.shape)
+            #print (self.layer_norm)
+            #print ('X LAYER NORM')
             x = self.layer_norm(x)
             if return_all_hiddens:
                 encoder_states[-1] = x
@@ -567,6 +591,13 @@ class TransformerEncoder(FairseqEncoder):
             # if self.training and self.dropout_structured_attention > 0 and random.random() > self.dropout_structured_attention:
             #     sent_str_att_out = sent_str_att_out * torch.zeros_like(sent_str_att_out)
             #print(sent_str_att_out)
+            #print(sent_str_att_out.shape)
+            #print (self.structured_attn_layer_norm)
+            #import sys; sys.exit() 
+
+            # Uncomment the below for struct layer norm
+            #if self.structured_attn_layer_norm is not None:
+                #sent_str_att_out = self.structured_attn_layer_norm(sent_str_att_out)
             str_outs.append(sent_str_att_out)
 
         if self.explicit_str_att:
@@ -577,11 +608,19 @@ class TransformerEncoder(FairseqEncoder):
             attended_hidden = torch.bmm(adj_mat, tp)
             es_str_att_out = F.relu(self.fzlinear(attended_hidden))
             es_str_att_out = torch.bmm(src_sent_mask.permute(0,2,1).float(), es_str_att_out)
+            if self.explicit_str_att_layer_norm is not None:
+                es_str_att_out = self.explicit_str_att_layer_norm(es_str_att_out)
             str_outs.append(es_str_att_out)
 
         if self.use_structured_attention or self.explicit_str_att:
             str_att_enc_out = self.str_to_enc_linear(torch.cat(str_outs, dim=2))
-            str_att_enc_out = 0.001*str_att_enc_out + 0.999*perm_enc_out # RESIDUAL # ADDED
+            #if self.joint_str_layer_norm is not None:
+                #str_att_enc_out = self.joint_str_layer_norm(str_att_enc_out)
+            ##str_att_enc_out = 0.001*str_att_enc_out + 0.999*perm_enc_out # RESIDUAL # ADDED # UNCOMMENT FOR LATENT
+            str_att_enc_out = 0.001*es_str_att_out + 0.999*perm_enc_out # RESIDUAL # ADDED # UNCOMMENT FOR LATENT
+            #str_att_enc_out = str_att_enc_out + perm_enc_out # RESIDUAL # ADDED
+            if self.post_residual_layer_norm is not None:
+                str_att_enc_out = self.post_residual_layer_norm(str_att_enc_out)
             x = str_att_enc_out.permute(1,0,2)
             #encoder_out.encoder_out = str_att_enc_out
 
