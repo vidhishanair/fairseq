@@ -5,7 +5,9 @@ import torch
 from fairseq.models.bart import StructSumBARTModel
 from fairseq.tasks.structsum_task import ChainsDataset
 
-dirname = 'saved_models/explicit_nonorm_999/'
+import sys
+fname = sys.argv[1]
+dirname = 'saved_models/'+fname+'/'
 bart = StructSumBARTModel.from_pretrained(
     dirname,
     checkpoint_file='checkpoint_best.pt',

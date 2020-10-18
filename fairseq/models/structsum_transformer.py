@@ -488,15 +488,18 @@ class TransformerEncoder(FairseqEncoder):
             self.str_to_enc_linear = None
 
         if self.use_layer_norm:
-            self.structured_attn_layer_norm = nn.LayerNorm(args.encoder_embed_dim//2)
-            self.explicit_str_att_layer_norm = nn.LayerNorm(args.encoder_embed_dim//2)
-            self.joint_str_layer_norm = nn.LayerNorm(args.encoder_embed_dim)
-            self.post_residual_layer_norm = nn.LayerNorm(args.encoder_embed_dim)
+            # self.structured_attn_layer_norm = LayerNorm(args.encoder_embed_dim)
+            # self.explicit_str_att_layer_norm = LayerNorm(args.encoder_embed_dim)
+            # self.joint_str_layer_norm = LayerNorm(args.encoder_embed_dim)
+            self.post_residual_layer_norm = LayerNorm(args.encoder_embed_dim)
         else:
-            self.structured_attn_layer_norm = None
-            self.explicit_str_att_layer_norm = None
-            self.joint_str_layer_norm = None
+            # self.structured_attn_layer_norm = None
+            # self.explicit_str_att_layer_norm = None
+            # self.joint_str_layer_norm = None
             self.post_residual_layer_norm = None
+        
+        if self.use_structured_attention or self.explicit_str_att:
+            self.alpha = nn.Parameter(torch.ones(args.encoder_embed_dim))
 
     def build_encoder_layer(self, args):
         return TransformerEncoderLayer(args)
@@ -608,19 +611,23 @@ class TransformerEncoder(FairseqEncoder):
             attended_hidden = torch.bmm(adj_mat, tp)
             es_str_att_out = F.relu(self.fzlinear(attended_hidden))
             es_str_att_out = torch.bmm(src_sent_mask.permute(0,2,1).float(), es_str_att_out)
-            if self.explicit_str_att_layer_norm is not None:
-                es_str_att_out = self.explicit_str_att_layer_norm(es_str_att_out)
+            ##if self.explicit_str_att_layer_norm is not None:
+                #import pdb; pdb.set_trace()
+                ##es_str_att_out = self.explicit_str_att_layer_norm(es_str_att_out)
             str_outs.append(es_str_att_out)
 
         if self.use_structured_attention or self.explicit_str_att:
-            str_att_enc_out = self.str_to_enc_linear(torch.cat(str_outs, dim=2))
+            #str_att_enc_out = self.str_to_enc_linear(torch.cat(str_outs, dim=2))
             #if self.joint_str_layer_norm is not None:
                 #str_att_enc_out = self.joint_str_layer_norm(str_att_enc_out)
             ##str_att_enc_out = 0.001*str_att_enc_out + 0.999*perm_enc_out # RESIDUAL # ADDED # UNCOMMENT FOR LATENT
-            str_att_enc_out = 0.001*es_str_att_out + 0.999*perm_enc_out # RESIDUAL # ADDED # UNCOMMENT FOR LATENT
-            #str_att_enc_out = str_att_enc_out + perm_enc_out # RESIDUAL # ADDED
+            #str_att_enc_out = 0.001*es_str_att_out + 0.999*perm_enc_out # RESIDUAL # ADDED # UNCOMMENT FOR LATENT
+            ##str_att_enc_out = (1 - self.alpha)*es_str_att_out + self.alpha*perm_enc_out # RESIDUAL # ADDED # UNCOMMENT FOR LATENT
+            str_att_enc_out = es_str_att_out + perm_enc_out # RESIDUAL # ADDED
             if self.post_residual_layer_norm is not None:
-                str_att_enc_out = self.post_residual_layer_norm(str_att_enc_out)
+                #import pdb; pdb.set_trace()
+                str_att_enc_out = self.layers[-1].final_layer_norm(str_att_enc_out)
+                #str_att_enc_out = self.post_residual_layer_norm(str_att_enc_out)
             x = str_att_enc_out.permute(1,0,2)
             #encoder_out.encoder_out = str_att_enc_out
 
