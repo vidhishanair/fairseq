@@ -130,7 +130,7 @@ data-bin/
 
 # Experimental Folder
 experimental/*
-*.sh
+#*.sh
 saved_models/*
 
 
